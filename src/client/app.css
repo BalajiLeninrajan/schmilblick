@@ -22,7 +22,8 @@
   display: flex;
   height: 104px;
   align-items: flex-end;
-  padding-left: var(--space-5);
+  /* the first card tilts out past its box from a pivot below it, so leave room for the corner */
+  padding-left: calc(var(--space-6) + var(--space-2));
 }
 
 .sb-hero-fan .sb-card {

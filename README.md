@@ -2,7 +2,7 @@
 
 A multiplayer web version of the card game from CS343 Assignment 2. Now you can lose to your friends instead of Peter Buhr.
 
-Play at https://schmilblick.bleninrajan.workers.dev. Make a room, share the four-letter code, and pass the deck.
+Play at https://schmilblick.balajileninrajan.dev. Make a room, share the four-letter code, and pass the deck.
 
 ## Rules
 
