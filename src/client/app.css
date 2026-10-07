@@ -232,6 +232,11 @@
   width: 100%;
 }
 
+/* .avatar clips its own ::after, so tooltips sit on wrappers; this restores the stack's overlap for them (package gap) */
+.avatar-stack > [data-tip] + [data-tip] {
+  margin-left: calc(-1 * var(--space-2));
+}
+
 .sb-log {
   padding: var(--space-2) var(--space-5);
 }

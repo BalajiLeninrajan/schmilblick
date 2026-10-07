@@ -220,11 +220,21 @@ function PlaysLog({ log, byId, nameOf }: { log: SeqPlay[]; byId: Map<string, Pub
   );
 }
 
-/** "Bo joins next game", "Bo and Cy join next game", "Bo, Cy and Di join next game" */
-function joinsNext(players: PublicPlayer[]) {
-  const names = players.map((p) => p.name);
-  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
-  return `${list} ${names.length === 1 ? "joins" : "join"} next game`;
+/** Players who joined mid-game, as a stack of avatars. */
+function NextGame({ players }: { players: PublicPlayer[] }) {
+  return (
+    <div className="cn-row">
+      <span className="avatar-stack">
+        {players.map((p) => (
+          <span key={p.id} className="cn-fit" data-tip={`${p.name} joins next game`}>
+            <Avatar p={p} />
+          </span>
+        ))}
+      </span>
+      <span className="cn-meta">Next game</span>
+      <span className="cn-sr-only">{players.map((p) => p.name).join(", ")} will join the next game</span>
+    </div>
+  );
 }
 
 export function Game({ state, you, send }: { state: LobbyState; you: string; send: ReturnType<typeof useLobby>["send"] }) {
@@ -529,7 +539,7 @@ export function Game({ state, you, send }: { state: LobbyState; you: string; sen
         </div>
         {watching.length > 0 && (
           <div className="panel-footer">
-            <span className="cn-meta">{joinsNext(watching)}</span>
+            <NextGame players={watching} />
           </div>
         )}
       </aside>
@@ -538,7 +548,7 @@ export function Game({ state, you, send }: { state: LobbyState; you: string; sen
         <PlaysLog log={log} byId={byId} nameOf={nameOf} />
         {watching.length > 0 && (
           <div className="panel-footer">
-            <span className="cn-meta">{joinsNext(watching)}</span>
+            <NextGame players={watching} />
           </div>
         )}
       </Sheet>

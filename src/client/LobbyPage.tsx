@@ -170,12 +170,7 @@ function Room({ state, you, send }: { state: LobbyState; you: string; send: Send
                   style={{ "--n": 4 } as React.CSSProperties}
                 >
                   {DICE.map((sides) => (
-                    <button
-                      key={sides}
-                      type="button"
-                      aria-pressed={state.sides === sides}
-                      onClick={() => send({ t: "die", sides })}
-                    >
+                    <button key={sides} type="button" aria-pressed={state.sides === sides} onClick={() => send({ t: "die", sides })}>
                       <b>d{sides}</b>
                     </button>
                   ))}

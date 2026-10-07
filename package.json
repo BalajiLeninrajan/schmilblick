@@ -35,5 +35,6 @@
       "workerd",
       "sharp"
     ]
-  }
+  },
+  "license": "MIT"
 }
