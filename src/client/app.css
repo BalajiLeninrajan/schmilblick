@@ -1,0 +1,969 @@
+/* Schmilblick. Only what no catppuccin-neu class expresses: the round table, cards, dice, and their motion. */
+
+/* ---- cards ---- */
+
+.sb-card {
+  display: block;
+  width: 44px;
+  height: auto;
+  aspect-ratio: 60 / 84;
+  filter: drop-shadow(2px 3px 4px rgb(17 17 27 / 0.5));
+}
+
+/* ---- home ---- */
+
+.sb-hero {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-4);
+}
+
+.sb-hero-fan {
+  display: flex;
+  height: 104px;
+  align-items: flex-end;
+  padding-left: var(--space-5);
+}
+
+.sb-hero-fan .sb-card {
+  width: 62px;
+  margin-left: -18px;
+  transform-origin: 50% 120%;
+  rotate: calc((var(--i) - 2) * 9deg);
+  animation: sb-bob 3.6s var(--ease-out) infinite;
+  animation-delay: calc(var(--i) * -0.6s);
+  transition: translate var(--t-fast) var(--ease-spring);
+}
+
+.sb-hero-fan .sb-card:first-child {
+  margin-left: 0;
+}
+
+.sb-hero-fan .sb-card:hover {
+  translate: 0 -12px;
+}
+
+@keyframes sb-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.sb-rules {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.sb-code-input {
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+
+.sb-code-chip {
+  cursor: pointer;
+  color: var(--text);
+}
+
+.sb-code-chip .cn-code {
+  letter-spacing: 0.14em;
+}
+
+.sb-code-chip svg {
+  color: var(--overlay-2);
+}
+
+/* ---- home and lobby ---- */
+
+.sb-home,
+.sb-lobby {
+  --page-pad: clamp(16px, 3vh, 40px);
+}
+
+.sb-play {
+  width: min(100%, 460px);
+}
+
+.sb-two-col {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.sb-home-grid {
+  margin-top: var(--space-5);
+}
+
+/* Big screens get two columns: play beside the rules, players beside settings, the table beside the log. */
+@media (width > 1060px) {
+  .sb-two-col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: var(--space-5);
+  }
+
+  .sb-play {
+    width: auto;
+  }
+
+  .sb-game {
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: var(--space-6);
+  }
+}
+
+.sb-side {
+  display: flex;
+  flex-direction: column;
+  align-self: center;
+  width: 100%;
+  max-height: 100cqh;
+}
+
+.sb-side-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sb-roster {
+  padding-inline: var(--space-1);
+  max-height: calc(100dvh - 240px);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Small screens: the lobby is one column that fills main, and the player list takes what's left. */
+@media (width <= 1060px) {
+  .sb-lobby {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .sb-room {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .sb-room > .panel:first-child,
+  .sb-room > .panel:first-child > .panel-body {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .sb-room > .panel:last-child {
+    flex: 0 0 auto;
+  }
+
+  .sb-roster {
+    max-height: none;
+    min-height: 0;
+  }
+}
+
+.sb-roster-item {
+  padding-block: var(--space-2);
+}
+
+.sb-roster-item.is-away {
+  opacity: var(--disabled-opacity);
+}
+
+.sb-host-crown {
+  display: block;
+  width: 18px;
+}
+
+/* the package stacks segmented controls at 520px; these stay in a row */
+.sb-seg-row {
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+}
+
+.sb-seg-row > button {
+  min-width: 0;
+}
+
+/* label over hint, instead of side by side */
+.sb-seg-stack > * {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+}
+
+.sb-seg-row.sb-seg-stack > * {
+  align-items: center;
+  padding-inline: var(--space-2);
+}
+
+.sb-empty-card {
+  width: 64px;
+  animation: sb-bob 3.2s var(--ease-out) infinite;
+}
+
+/* ---- game layout: everything fits in one screen ---- */
+
+/* The shell is exactly the viewport (app-shell is-fixed on #root), so main is whatever's left under the topbar.
+   Only a list that can't fit scrolls, inside its own card; main scrolls only as a last resort on tiny screens. */
+#root > main {
+  overflow-y: auto;
+}
+
+.sb-stage {
+  --sb-pad: var(--space-3);
+  display: grid;
+  place-items: center;
+  padding: var(--sb-pad) var(--page-gutter);
+  overflow: hidden;
+  container-type: size;
+}
+
+.sb-game {
+  display: grid;
+  place-items: center;
+  width: 100%;
+}
+
+.sb-log {
+  padding: var(--space-2) var(--space-5);
+}
+
+.sb-log-row {
+  padding-block: var(--space-2);
+}
+
+.sb-log-tags {
+  gap: var(--space-1);
+}
+
+/* ---- the table ---- */
+
+.sb-table {
+  --sb-ratio: 0.9;
+  position: relative;
+  width: min(100%, 900px, calc(100cqh / var(--sb-ratio)));
+  aspect-ratio: 1 / var(--sb-ratio);
+  container-type: size;
+}
+
+.sb-table-tools {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  right: 0;
+  display: grid;
+  justify-items: end;
+  gap: var(--space-1);
+}
+
+.sb-felt {
+  position: absolute;
+  inset: 18%;
+  border-radius: 50%;
+  box-shadow: var(--neu-inset);
+}
+
+.sb-table.is-schmilblick {
+  animation: sb-quake 0.5s var(--ease-out) 2;
+}
+
+@keyframes sb-quake {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  20% {
+    translate: -4px 2px;
+  }
+  40% {
+    translate: 4px -2px;
+  }
+  60% {
+    translate: -3px -1px;
+  }
+  80% {
+    translate: 2px 1px;
+  }
+}
+
+/* ---- seats ---- */
+
+.sb-seat {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  width: clamp(68px, 14cqw, 118px);
+  translate: -50% -50%;
+  transition:
+    scale var(--t-base) var(--ease-spring),
+    opacity var(--t-slow) var(--ease-out),
+    filter var(--t-slow) var(--ease-out);
+}
+
+.sb-seat-body {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  padding: var(--space-2) var(--space-2) var(--space-2);
+  border: 1px solid var(--edge);
+  border-radius: var(--cn-radius-card);
+  background: var(--base);
+  box-shadow: var(--neu-raised-soft);
+  text-align: center;
+  transition:
+    box-shadow var(--t-base) var(--ease-out),
+    translate var(--t-base) var(--ease-spring);
+}
+
+.sb-seat-name {
+  max-width: 100%;
+}
+
+.sb-seat-meta {
+  line-height: 1.2;
+}
+
+.sb-seat.is-you .sb-seat-name {
+  color: var(--accent);
+}
+
+.sb-seat.is-active {
+  z-index: 3;
+  scale: 1.08;
+}
+
+.sb-seat.is-active .sb-seat-body {
+  translate: -2px -2px;
+  box-shadow: var(--hard-offset) var(--hard-offset) 0 color-mix(in srgb, var(--accent) 50%, var(--surface-0));
+}
+
+.sb-seat.is-active .avatar {
+  animation: sb-ring 1.6s var(--ease-out) infinite;
+}
+
+@keyframes sb-ring {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 12px color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+}
+
+.sb-seat.is-dead {
+  opacity: 0.5;
+  filter: grayscale(0.9);
+}
+
+.sb-seat.is-dying {
+  animation: sb-shake 0.45s var(--ease-out) 2;
+}
+
+@keyframes sb-shake {
+  0%,
+  100% {
+    rotate: 0deg;
+  }
+  25% {
+    rotate: -6deg;
+  }
+  75% {
+    rotate: 6deg;
+  }
+}
+
+.sb-seat.is-receiving {
+  scale: 1.12;
+}
+
+.sb-seat.is-winner .sb-seat-body {
+  box-shadow: var(--hard-offset) var(--hard-offset) 0 var(--yellow);
+}
+
+.sb-seat-avatar {
+  display: grid;
+  place-items: center;
+  height: 32px;
+}
+
+.sb-ghost {
+  width: 26px;
+  animation: sb-float 2.4s var(--ease-out) infinite;
+}
+
+@keyframes sb-float {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -3px;
+  }
+}
+
+.sb-ghost-rise {
+  position: absolute;
+  top: -10px;
+  width: 34px;
+  animation: sb-rise 1.3s var(--ease-out) forwards;
+}
+
+@keyframes sb-rise {
+  0% {
+    opacity: 0;
+    translate: 0 10px;
+    scale: 0.6;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    translate: 0 -56px;
+    scale: 1.2;
+  }
+}
+
+.sb-crown {
+  position: absolute;
+  top: -26px;
+  width: 34px;
+  animation:
+    sb-crown 0.7s var(--ease-spring) backwards,
+    sb-float 2s var(--ease-out) 0.7s infinite;
+}
+
+@keyframes sb-crown {
+  from {
+    translate: 0 -24px;
+    rotate: -30deg;
+    opacity: 0;
+  }
+}
+
+.sb-mug {
+  position: absolute;
+  top: -40px;
+  width: 34px;
+  transform-origin: 50% 90%;
+  animation:
+    sb-pop 0.45s var(--ease-spring) backwards,
+    sb-drink 1s var(--ease-out) 0.45s 2;
+}
+
+@keyframes sb-pop {
+  from {
+    scale: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes sb-drink {
+  0%,
+  100% {
+    rotate: 0deg;
+    translate: 0 0;
+  }
+  40%,
+  60% {
+    rotate: -40deg;
+    translate: -4px 4px;
+  }
+}
+
+/* fan of cards each player has taken */
+.sb-fan {
+  display: flex;
+  justify-content: center;
+  height: 26px;
+}
+
+.sb-fan .sb-card {
+  width: 17px;
+  margin-inline: -4px;
+  transform-origin: 50% 140%;
+  rotate: calc(var(--k) * 12deg);
+  filter: none;
+  animation: sb-pop 0.3s var(--ease-spring) backwards;
+}
+
+/* ---- center: deck, dice, caption ---- */
+
+.sb-center {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  width: 52cqw;
+  translate: -50% -50%;
+}
+
+.sb-deck {
+  position: relative;
+  width: 60px;
+  height: 84px;
+}
+
+.sb-deck-card {
+  position: absolute;
+  inset: 0;
+  width: 60px;
+  translate: calc(var(--k) * -1.5px) calc(var(--k) * -2px);
+  rotate: calc(var(--k) * 1.5deg - 3deg);
+  animation: sb-deal 0.4s var(--ease-spring) backwards;
+  animation-delay: calc(var(--k) * 70ms);
+}
+
+@keyframes sb-deal {
+  from {
+    translate: 0 -40px;
+    opacity: 0;
+    rotate: -20deg;
+  }
+}
+
+.sb-deck.is-empty::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--cn-radius-card);
+  box-shadow: var(--neu-inset-soft);
+}
+
+.sb-deck-count {
+  position: absolute;
+  right: -30px;
+  bottom: -10px;
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  height: 44px;
+  padding-inline: var(--space-2);
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: var(--base);
+  box-shadow: var(--neu-raised-soft);
+  color: var(--text);
+  font-size: 18px;
+  animation: sb-tick 0.4s var(--ease-spring);
+}
+
+.sb-deck-count.is-death {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 45%, transparent);
+}
+
+@keyframes sb-tick {
+  0% {
+    scale: 1.35;
+  }
+  100% {
+    scale: 1;
+  }
+}
+
+.sb-dice {
+  display: flex;
+  gap: var(--space-4);
+  min-height: 92px;
+}
+
+.sb-die-wrap {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  animation: sb-pop 0.35s var(--ease-spring) backwards;
+}
+
+.sb-die {
+  width: 68px;
+  filter: drop-shadow(3px 4px 6px rgb(17 17 27 / 0.55));
+}
+
+.sb-die-num {
+  fill: var(--crust);
+  font: 700 30px/1 var(--sans);
+  font-variant-numeric: tabular-nums;
+}
+
+.sb-die-num.is-d10 {
+  font-size: 22px;
+}
+
+.sb-die-wrap.is-rolling .sb-die {
+  animation: sb-tumble 0.55s linear infinite;
+}
+
+@keyframes sb-tumble {
+  0% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+  25% {
+    transform: translateY(-14px) rotate(100deg) scale(0.92);
+  }
+  50% {
+    transform: translateY(0) rotate(190deg) scale(1.04);
+  }
+  75% {
+    transform: translateY(-8px) rotate(280deg) scale(0.95);
+  }
+  100% {
+    transform: translateY(0) rotate(360deg) scale(1);
+  }
+}
+
+.sb-die-wrap.is-landed .sb-die {
+  animation: sb-land 0.5s var(--ease-spring);
+}
+
+@keyframes sb-land {
+  0% {
+    scale: 1.25;
+    rotate: -12deg;
+  }
+  100% {
+    scale: 1;
+    rotate: 0deg;
+  }
+}
+
+.sb-die-wrap.is-hot .sb-die {
+  animation:
+    sb-land 0.5s var(--ease-spring),
+    sb-glow 1s var(--ease-out) 0.5s infinite;
+}
+
+@keyframes sb-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 4px var(--yellow));
+  }
+  50% {
+    filter: drop-shadow(0 0 16px var(--yellow));
+  }
+}
+
+.sb-caption {
+  min-height: 3.2em;
+  max-width: 34ch;
+  margin: 0;
+  color: var(--subtext-1);
+}
+
+.sb-turn-actions {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+}
+
+.sb-roll:not(:disabled) {
+  animation: sb-wiggle 2.4s var(--ease-out) infinite;
+}
+
+@keyframes sb-wiggle {
+  0%,
+  84%,
+  100% {
+    rotate: 0deg;
+  }
+  88% {
+    rotate: -3deg;
+  }
+  92% {
+    rotate: 3deg;
+  }
+  96% {
+    rotate: -2deg;
+  }
+}
+
+/* ---- flying things ---- */
+
+.sb-flying {
+  position: absolute;
+  z-index: 4;
+  top: calc(50% + var(--oy));
+  left: calc(50% + var(--ox));
+  width: 40px;
+  translate: -50% -50%;
+  animation: sb-fly 0.7s var(--ease-out) both;
+  animation-delay: calc(var(--k) * 45ms);
+}
+
+@keyframes sb-fly {
+  0% {
+    transform: translate(0, 0) rotate(0deg) scale(0.7);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+    transform: translate(0, -18px) rotate(0deg) scale(1);
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(var(--tx) * 1cqw - var(--ox)), calc(var(--ty) * 1cqh - var(--oy))) rotate(var(--spin)) scale(0.45);
+    opacity: 0;
+  }
+}
+
+.sb-passing {
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  translate: -50% -50%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sb-pass-trail {
+  z-index: 3;
+  filter: blur(calc(var(--trail) * 0.6px));
+}
+
+.sb-pass-trail .sb-pass-card {
+  opacity: calc(0.5 - var(--trail) * 0.12);
+}
+
+.sb-pass-card {
+  width: 42px;
+}
+
+.sb-pass-count {
+  position: absolute;
+  bottom: -8px;
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  background: var(--mauve);
+  color: var(--crust);
+  font: 700 12px/1.6 var(--sans);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Schmilblick! ---- */
+
+.sb-schmilblick {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.sb-schmilblick span {
+  padding: var(--space-3) var(--space-5);
+  border: 1px solid var(--surface-1);
+  border-radius: var(--cn-radius-panel);
+  background: var(--base);
+  box-shadow: 10px 10px 0 var(--yellow);
+  color: var(--text);
+  font: 700 clamp(30px, 8cqw, 64px)/1 var(--sans);
+  letter-spacing: -0.03em;
+  animation: sb-shout 2.6s var(--ease-spring) both;
+}
+
+@keyframes sb-shout {
+  0% {
+    scale: 0;
+    rotate: -18deg;
+    opacity: 0;
+  }
+  14% {
+    scale: 1.1;
+    rotate: 4deg;
+    opacity: 1;
+  }
+  22% {
+    scale: 1;
+    rotate: -3deg;
+  }
+  30%,
+  80% {
+    rotate: -3deg;
+    scale: 1;
+    opacity: 1;
+  }
+  45% {
+    rotate: 2deg;
+  }
+  60% {
+    rotate: -2deg;
+  }
+  100% {
+    scale: 0.8;
+    opacity: 0;
+    rotate: -3deg;
+  }
+}
+
+/* ---- ending ---- */
+
+.sb-ending {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  text-align: center;
+  animation: enter var(--t-slow) var(--ease-out) backwards;
+}
+
+.sb-ending h2 {
+  margin: 0;
+}
+
+.sb-ending p {
+  margin: 0;
+}
+
+.sb-ending-icon {
+  width: 56px;
+  animation:
+    sb-crown 0.7s var(--ease-spring) backwards,
+    sb-float 2.4s var(--ease-out) 0.7s infinite;
+}
+
+.sb-confetti {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sb-confetti i {
+  position: absolute;
+  top: -12px;
+  width: 8px;
+  height: 12px;
+  border-radius: var(--cn-radius-chip);
+  scale: var(--s);
+  animation: sb-fall 3s linear infinite backwards;
+}
+
+@keyframes sb-fall {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(12px, 50cqh) rotate(calc(var(--r) / 2));
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-6px, 102cqh) rotate(var(--r));
+    opacity: 0;
+  }
+}
+
+/* ---- phones ---- */
+
+@media (max-width: 760px) {
+  .sb-stage {
+    --sb-pad: var(--space-2);
+  }
+
+  .sb-table {
+    --sb-ratio: 1.45;
+  }
+
+  .sb-felt {
+    inset: 20% 16%;
+  }
+
+  .sb-seat-body {
+    padding: var(--space-1);
+  }
+
+  .sb-seat .cn-name {
+    font-size: 12px;
+  }
+
+  .sb-seat .avatar {
+    width: 26px;
+    height: 26px;
+    font-size: 11px;
+  }
+
+  .sb-seat-avatar {
+    height: 26px;
+  }
+
+  .sb-fan {
+    display: none;
+  }
+
+  .sb-table-facts {
+    display: none;
+  }
+
+  .sb-center {
+    width: 58cqw;
+    gap: var(--space-2);
+  }
+
+  .sb-deck,
+  .sb-deck-card {
+    width: 48px;
+    height: 67px;
+  }
+
+  .sb-deck-count {
+    min-width: 36px;
+    height: 36px;
+    right: -24px;
+    font-size: 15px;
+  }
+
+  .sb-die {
+    width: 50px;
+  }
+
+  .sb-dice {
+    min-height: 68px;
+  }
+
+  .sb-caption {
+    min-height: 2.8em;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 520px) {
+  .sb-lobby-bar .sb-wordmark-text {
+    display: none;
+  }
+}
+
+/* Last, so component display rules (like .sb-table-tools or .sb-side) never override them.
+   Range syntax leaves no gap between the two at fractional widths. */
+@media (width > 1060px) {
+  .sb-narrow-only {
+    display: none;
+  }
+}
+
+@media (width <= 1060px) {
+  .sb-wide-only {
+    display: none;
+  }
+}
