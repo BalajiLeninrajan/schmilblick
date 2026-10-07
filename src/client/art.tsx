@@ -58,8 +58,23 @@ function Face({ face }: { face: (typeof FACES)[number] }) {
   );
 }
 
-export function CuteCard({ n, className = "", style }: { n: number; className?: string; style?: CSSProperties }) {
-  const { tint, face } = cardLook(n);
+// Number cards (Tactique) keep one color per value. 7 is red: it's the Bidule card.
+const VALUE_TINTS = ["", "sky", "green", "teal", "yellow", "peach", "pink", "red", "lavender"] as const;
+
+export function CuteCard({
+  n,
+  value,
+  className = "",
+  style,
+}: {
+  n: number;
+  value?: number; // draws the number in the corners, for Tactique hands
+  className?: string;
+  style?: CSSProperties;
+}) {
+  const look = cardLook(n);
+  const tint = value ? VALUE_TINTS[value] : look.tint;
+  const face = value ? cardLook(value).face : look.face;
   return (
     <svg className={`sb-card ${className}`} viewBox="0 0 60 84" style={{ ...accentVar(tint), ...style }} aria-hidden="true">
       <rect x="1.5" y="1.5" width="57" height="81" rx="9" fill="var(--accent)" />
@@ -76,8 +91,25 @@ export function CuteCard({ n, className = "", style }: { n: number; className?: 
         strokeWidth="1.6"
         strokeDasharray="3 3.5"
       />
-      <path d="M14 15l1.6 3.4 3.4 1.6-3.4 1.6L14 25l-1.6-3.4L9 20l3.4-1.6z" fill="var(--base)" opacity=".55" />
-      <path d="M46 62.5c0-2 2.6-3 3.8-1.2 1.2-1.8 3.8-.8 3.8 1.2 0 2.4-3.8 4.8-3.8 4.8s-3.8-2.4-3.8-4.8z" fill="var(--base)" opacity=".5" />
+      {value ? (
+        <>
+          <text x="13" y="21" textAnchor="middle" className="sb-card-num">
+            {value}
+          </text>
+          <text x="47" y="69" textAnchor="middle" className="sb-card-num" transform="rotate(180 47 63)">
+            {value}
+          </text>
+        </>
+      ) : (
+        <>
+          <path d="M14 15l1.6 3.4 3.4 1.6-3.4 1.6L14 25l-1.6-3.4L9 20l3.4-1.6z" fill="var(--base)" opacity=".55" />
+          <path
+            d="M46 62.5c0-2 2.6-3 3.8-1.2 1.2-1.8 3.8-.8 3.8 1.2 0 2.4-3.8 4.8-3.8 4.8s-3.8-2.4-3.8-4.8z"
+            fill="var(--base)"
+            opacity=".5"
+          />
+        </>
+      )}
       <Face face={face} />
     </svg>
   );

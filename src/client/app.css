@@ -908,9 +908,97 @@
   }
 }
 
+/* ---- Tactique: hands, played cards, Bidule ---- */
+
+.sb-card-num {
+  fill: var(--crust);
+  font: 700 15px/1 var(--sans);
+  font-variant-numeric: tabular-nums;
+}
+
+.sb-hand {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.sb-hand-card {
+  padding: 0;
+  border: 0;
+  border-radius: var(--cn-radius-card);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    translate var(--t-fast) var(--ease-spring),
+    rotate var(--t-fast) var(--ease-spring),
+    opacity var(--t-fast) var(--ease-out);
+}
+
+.sb-hand-card .sb-card {
+  width: 48px;
+}
+
+.sb-hand-card:disabled {
+  cursor: default;
+}
+
+/* not your turn: hold your cards low and dim */
+.sb-hand:not(.is-live) .sb-hand-card {
+  opacity: 0.55;
+}
+
+/* your turn: cards you can't play (a 7 on a returned deck, anything but a 7 on a death deck) */
+.sb-hand.is-live .sb-hand-card:disabled {
+  opacity: 0.35;
+  translate: 0 4px;
+}
+
+.sb-hand-card:not(:disabled):hover,
+.sb-hand-card.is-picked {
+  translate: 0 -8px;
+  rotate: -3deg;
+}
+
+.sb-hand-card.is-bidule .sb-card {
+  animation: sb-bidule-glow 1.2s var(--ease-out) infinite;
+}
+
+@keyframes sb-bidule-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 3px var(--peach));
+  }
+  50% {
+    filter: drop-shadow(0 0 12px var(--peach));
+  }
+}
+
+.sb-played {
+  width: 52px;
+  animation: sb-flip 0.5s var(--ease-spring) backwards;
+}
+
+@keyframes sb-flip {
+  from {
+    transform: perspective(300px) rotateY(90deg) translateY(-24px);
+    opacity: 0;
+  }
+}
+
+.sb-schmilblick.is-bidule span {
+  box-shadow: 10px 10px 0 var(--peach);
+}
+
 /* ---- phones ---- */
 
 @media (max-width: 760px) {
+  .sb-hand-card .sb-card {
+    width: 40px;
+  }
+
+  .sb-played {
+    width: 42px;
+  }
+
   .sb-stage {
     --sb-pad: var(--space-2);
   }
