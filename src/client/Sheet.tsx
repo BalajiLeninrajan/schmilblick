@@ -66,12 +66,29 @@ export function RulesButton() {
 
 export function Rules() {
   return (
-    <ol className="sb-rules cn-copy">
-      <li>The deck starts in a random player's hands. On your turn, roll the d8 and take that many cards (or whatever's left).</li>
-      <li>Odd number of cards left? Pass the deck to your left. Even? Pass it right.</li>
-      <li>If the deck you were handed was a multiple of 7, it's a death deck. You still play, then you're out.</li>
-      <li>Survive a turn and the Schmilblick die rolls for you (a d10 unless the host picks another). Its top number means everyone still in drinks.</li>
-      <li>Take the last card, or be the last one standing, to win. Win on a death deck and nobody wins.</li>
-    </ol>
+    <div className="cn-stack">
+      <ol className="sb-rules cn-copy">
+        <li>The deck starts in a random player's hands. On your turn, take 1 to 8 cards from it.</li>
+        <li>Odd number of cards left? Pass the deck to your left. Even? Pass it right.</li>
+        <li>If the deck you were handed was a multiple of 7, it's a death deck. You still play, then you're out.</li>
+        <li>
+          Survive a turn and the Schmilblick die rolls for you (a d10 unless the host picks another). Its top number means everyone still in
+          drinks.
+        </li>
+        <li>Take the last card, or be the last one standing, to win. Win on a death deck and nobody wins.</li>
+      </ol>
+      <div>
+        <h3 className="cn-name cn-m-0">Hasard</h3>
+        <p className="cn-copy cn-m-0">A d8 decides how many cards you take.</p>
+      </div>
+      <div>
+        <h3 className="cn-name cn-m-0">Tactique</h3>
+        <p className="cn-copy cn-m-0">
+          You hold 3 cards from 1 to 8 that only you can see. Play one to take that many, then draw a new one. Handed a death deck while
+          holding a 7? Play it for a <b>Bidule</b>: you survive, and the death deck goes straight back to whoever sent it. They can't Bidule
+          it back, so they're out.
+        </p>
+      </div>
+    </div>
   );
 }
