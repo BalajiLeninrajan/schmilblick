@@ -19,10 +19,17 @@ import {
 } from "../src/shared/protocol";
 import {
   DEFAULT_SCHMILBLICK_DIE,
+  HAND_SIZE,
   MAX_PLAYERS,
   MIN_PLAYERS,
+  MODES,
   SCHMILBLICK_DICE,
+  drawCard,
+  legalCards,
   playTurn,
+  resolveTurn,
+  type DeckState,
+  type Mode,
   type Rng,
   type SchmilblickDie,
 } from "../src/shared/rules";
@@ -44,9 +51,19 @@ interface Stored {
   phase: LobbyState["phase"];
   length: GameLength;
   sides?: SchmilblickDie; // missing on lobbies made before the die was configurable
+  mode?: Mode; // missing on lobbies made before Tactique
   hostId: string | null;
   players: Player[];
-  game: (Omit<GameState, "readyIn" | "sides"> & { readyAt: number; seq: number; sides?: SchmilblickDie }) | null;
+  game:
+    | (Omit<GameState, "readyIn" | "sides" | "mode" | "deckState"> & {
+        readyAt: number;
+        seq: number;
+        sides?: SchmilblickDie;
+        mode?: Mode;
+        deckState?: DeckState;
+        hands?: Record<string, number[]>; // Tactique hands, never broadcast
+      })
+    | null;
 }
 
 interface Attachment {
@@ -230,6 +247,13 @@ export class Lobby extends DurableObject<Env> {
         s.sides = msg.sides;
         return this.commit();
       }
+      case "mode": {
+        if (me.id !== s.hostId) return "Only the host picks the mode.";
+        if (s.phase === "playing") return "A game is running.";
+        if (!MODES.includes(msg.mode)) return;
+        s.mode = msg.mode;
+        return this.commit();
+      }
       case "start": {
         if (me.id !== s.hostId) return "Only the host can start.";
         if (s.phase === "playing") return;
@@ -242,7 +266,18 @@ export class Lobby extends DurableObject<Env> {
         if (s.phase !== "playing" || !g) return;
         if (g.currentId !== me.id) return "Not your turn.";
         if (Date.now() < g.readyAt - 400) return; // still animating the last play
-        this.roll();
+        if ((g.mode ?? "hasard") !== "hasard") return;
+        this.advance();
+        return this.commit();
+      }
+      case "play": {
+        const g = s.game;
+        if (s.phase !== "playing" || !g || g.mode !== "tactique") return;
+        if (g.currentId !== me.id) return "Not your turn.";
+        if (Date.now() < g.readyAt - 400) return;
+        const hand = g.hands?.[me.id] ?? [];
+        if (!legalCards(hand, g.deck, g.deckState ?? "normal").includes(msg.card)) return "You can't play that card.";
+        this.advance(msg.card);
         return this.commit();
       }
       case "lobby": {
@@ -284,7 +319,8 @@ export class Lobby extends DurableObject<Env> {
       p.alive = !p.spectator;
       p.cards = 0;
     }
-    const deck = DECK_TABLE.hasard[seated.length][s.length].cards;
+    const mode = s.mode ?? "hasard";
+    const deck = DECK_TABLE[mode][seated.length][s.length].cards;
     const first = seated[rng(seated.length)];
     s.phase = "playing";
     s.game = {
@@ -298,14 +334,35 @@ export class Lobby extends DurableObject<Env> {
       readyAt: Date.now() + 1200,
       seq: 0,
       sides: s.sides ?? DEFAULT_SCHMILBLICK_DIE,
+      mode,
+      deckState: "normal",
+      hands:
+        mode === "tactique"
+          ? Object.fromEntries(seated.map((p) => [p.id, Array.from({ length: HAND_SIZE }, () => drawCard(rng))]))
+          : undefined,
     };
   }
 
-  private roll() {
+  /** Plays the current turn: a d8 roll in Hasard, or `card` in Tactique (a random legal card when the player is AFK). */
+  private advance(card?: number) {
     const s = this.s!;
     const g = s.game!;
     const seats = g.seats.map((id) => s.players.find((p) => p.id === id)!);
-    const play = playTurn(seats, g.currentId!, g.deck, rng, g.sides ?? DEFAULT_SCHMILBLICK_DIE);
+    const sides = g.sides ?? DEFAULT_SCHMILBLICK_DIE;
+    let play;
+    if (g.mode === "tactique") {
+      const hand = (g.hands ??= {})[g.currentId!] ?? [];
+      const state = g.deckState ?? "normal";
+      const legal = legalCards(hand, g.deck, state);
+      const value = card ?? legal[rng(legal.length)];
+      play = resolveTurn(seats, g.currentId!, g.deck, state, value, "tactique", rng, sides);
+      hand.splice(hand.indexOf(value), 1);
+      if (play.death) delete g.hands[g.currentId!];
+      else hand.push(drawCard(rng));
+      g.deckState = play.nextState;
+    } else {
+      play = playTurn(seats, g.currentId!, g.deck, rng, sides);
+    }
     const me = seats.find((p) => p.id === play.playerId)!;
     me.cards += play.took;
 
@@ -349,7 +406,7 @@ export class Lobby extends DurableObject<Env> {
       const cur = s.players.find((p) => p.id === g.currentId);
       const due = g.readyAt + (cur?.connected ? AFK_MS : OFFLINE_MS);
       if (now >= due - 50) {
-        this.roll();
+        this.advance();
         changed = true;
       }
     }
@@ -404,14 +461,21 @@ export class Lobby extends DurableObject<Env> {
     const s = this.s!;
     let game: GameState | null = null;
     if (s.game) {
-      const { readyAt, seq: _seq, ...rest } = s.game;
-      game = { ...rest, sides: rest.sides ?? DEFAULT_SCHMILBLICK_DIE, readyIn: Math.max(0, readyAt - Date.now()) };
+      const { readyAt, seq: _seq, hands: _hands, ...rest } = s.game;
+      game = {
+        ...rest,
+        sides: rest.sides ?? DEFAULT_SCHMILBLICK_DIE,
+        mode: rest.mode ?? "hasard",
+        deckState: rest.deckState ?? "normal",
+        readyIn: Math.max(0, readyAt - Date.now()),
+      };
     }
     return {
       code: s.code,
       phase: s.phase,
       length: s.length,
       sides: s.sides ?? DEFAULT_SCHMILBLICK_DIE,
+      mode: s.mode ?? "hasard",
       hostId: s.hostId,
       players: s.players.map(({ token: _t, joinedAt: _j, goneAt: _g, ...p }) => p),
       game,
@@ -420,7 +484,8 @@ export class Lobby extends DurableObject<Env> {
 
   private sendTo(ws: WebSocket, you: string, state = this.publicState()) {
     try {
-      ws.send(JSON.stringify({ t: "state", state, you } satisfies ServerMsg));
+      const hand = this.s?.game?.hands?.[you] ?? null;
+      ws.send(JSON.stringify({ t: "state", state, you, hand } satisfies ServerMsg));
     } catch {
       /* socket already gone */
     }
