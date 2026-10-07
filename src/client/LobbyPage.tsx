@@ -90,7 +90,7 @@ function Room({ state, you, send }: { state: LobbyState; you: string; send: Send
   const online = seated.filter((p) => p.connected).length;
   const me = state.players.find((p) => p.id === you);
   const count = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, seated.length));
-  const row = DECK_TABLE[count];
+  const row = DECK_TABLE.hasard[count];
   const host = state.players.find((p) => p.id === state.hostId);
 
   return (
