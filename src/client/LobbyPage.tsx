@@ -60,7 +60,7 @@ function NameForm({ initial, submitLabel, onSubmit }: { initial: string; submitL
           id="player-name"
           className="input"
           maxLength={NAME_MAX}
-          placeholder="Gloria"
+          placeholder="Billy Bobby"
           autoFocus
           value={name}
           onChange={(e) => setName(e.target.value)}

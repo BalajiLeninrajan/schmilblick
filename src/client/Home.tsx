@@ -131,7 +131,7 @@ export function Home() {
                     id="name"
                     className="input"
                     maxLength={NAME_MAX}
-                    placeholder="Gloria"
+                    placeholder="Billy Bobby"
                     value={name}
                     autoComplete="nickname"
                     autoFocus={mode === "create" || !name}
