@@ -12,9 +12,12 @@
 // its turns-per-player goal, capped at a share of that ceiling, so "long" means a near-battle-royale
 // instead of a deck so big that the extra cards never get played.
 //
-// Tactique bots play greedily: take the last cards when they can, attack whenever a card leaves a death
-// deck, Bidule whenever they can, and otherwise play a random card. Real players attack less, so
-// Tactique games run a little longer than the table says.
+// Tactique isn't searched. Kills, not the deck, end a Tactique game: a bigger deck barely makes it longer,
+// it only makes last-card wins rarer. So Tactique decks are the Hasard deck times TACTIQUE_DECK_SCALE,
+// which makes Tactique mostly a battle to be the last one alive. At 1.5x, players who attack half the
+// time they can still win by taking the last card in about 1 game in 10.
+// The recorded stats come from greedy bots: take the last cards when they can, attack whenever a card
+// leaves a death deck, Bidule whenever they can, and otherwise play a random card.
 
 import { writeFileSync } from "node:fs";
 import {
@@ -34,6 +37,7 @@ import {
 } from "../src/shared/rules.ts";
 
 const SIMS = 4000;
+const TACTIQUE_DECK_SCALE = 1.5;
 // turns per player, and the share of the attrition ceiling a length may reach
 const LENGTHS = {
   short: { perPlayer: 3, ceiling: 0.55 },
@@ -127,6 +131,23 @@ for (const mode of MODES) {
   console.log(`== ${mode}`);
   for (let n = MIN_PLAYERS; n <= MAX_PLAYERS; n++) {
     table[mode][n] = {} as Row;
+    if (mode === "tactique") {
+      for (const name of Object.keys(LENGTHS) as (keyof typeof LENGTHS)[]) {
+        let deck = Math.round(table.hasard[n][name].cards * TACTIQUE_DECK_SCALE);
+        if (isDeathDeck(deck)) deck++;
+        const st = simulate(n, deck, mode);
+        table[mode][n][name] = {
+          cards: deck,
+          turns: +st.turns.toFixed(1),
+          deaths: +st.deaths.toFixed(2),
+          noWinner: +st.noWinner.toFixed(3),
+        };
+        console.log(
+          `${String(n).padStart(2)}p ${name.padEnd(6)} cards=${String(deck).padStart(3)} turns=${st.turns.toFixed(1).padStart(5)} deaths=${st.deaths.toFixed(2)}`,
+        );
+      }
+      continue;
+    }
     let floor = 10;
     const ceiling = simulate(n, 5001, mode).turns; // mean turns when the deck never runs out
     for (const [name, { perPlayer, ceiling: share }] of Object.entries(LENGTHS) as [
