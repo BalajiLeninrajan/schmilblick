@@ -11,9 +11,27 @@
 // death deck, so attrition ends the game after roughly 7 * (players - 1) turns. A length's target is
 // its turns-per-player goal, capped at a share of that ceiling, so "long" means a near-battle-royale
 // instead of a deck so big that the extra cards never get played.
+//
+// Tactique bots play greedily: take the last cards when they can, attack whenever a card leaves a death
+// deck, Bidule whenever they can, and otherwise play a random card. Real players attack less, so
+// Tactique games run a little longer than the table says.
 
 import { writeFileSync } from "node:fs";
-import { MAX_PLAYERS, MIN_PLAYERS, isDeathDeck, playTurn, type SeatLike } from "../src/shared/rules.ts";
+import {
+  HAND_SIZE,
+  MAX_PLAYERS,
+  MIN_PLAYERS,
+  MODES,
+  drawCard,
+  isDeathDeck,
+  legalCards,
+  playTurn,
+  resolveTurn,
+  type DeckState,
+  type Mode,
+  type Rng,
+  type SeatLike,
+} from "../src/shared/rules.ts";
 
 const SIMS = 4000;
 // turns per player, and the share of the attrition ceiling a length may reach
@@ -43,16 +61,37 @@ interface Stats {
   schmilblicks: number;
 }
 
-function simulate(players: number, deck: number): Stats {
-  const rng = rngFrom(players * 1000 + deck);
+function botCard(hand: number[], deck: number, state: DeckState, rng: Rng) {
+  const legal = legalCards(hand, deck, state);
+  const dying = state === "returned" || (state === "normal" && isDeathDeck(deck) && !legal.includes(7));
+  const win = legal.find((c) => c >= deck);
+  if (win !== undefined && !dying) return win;
+  const kill = legal.find((c) => c < deck && isDeathDeck(deck - c));
+  if (kill !== undefined) return kill;
+  return legal[rng(legal.length)];
+}
+
+function simulate(players: number, deck: number, mode: Mode): Stats {
+  const rng = rngFrom(players * 1000 + deck + (mode === "tactique" ? 7_000_000 : 0));
   const s: Stats = { turns: 0, noWinner: 0, dramatic: 0, deaths: 0, schmilblicks: 0 };
   for (let g = 0; g < SIMS; g++) {
     const seats: SeatLike[] = Array.from({ length: players }, (_, i) => ({ id: String(i), alive: true }));
     let cur = String(rng(players));
     let d = deck;
+    let state: DeckState = "normal";
     let deaths = 0;
+    // Only Tactique deals hands, so Hasard draws the same random numbers it always has.
+    const hands = mode === "tactique" ? seats.map(() => Array.from({ length: HAND_SIZE }, () => drawCard(rng))) : [];
     for (;;) {
-      const p = playTurn(seats, cur, d, rng);
+      let p;
+      if (mode === "hasard") p = playTurn(seats, cur, d, rng);
+      else {
+        const hand = hands[+cur];
+        const card = botCard(hand, d, state, rng);
+        p = resolveTurn(seats, cur, d, state, card, mode, rng);
+        hand.splice(hand.indexOf(card), 1, drawCard(rng));
+        state = p.nextState;
+      }
       s.turns++;
       if (p.death) deaths++;
       if (p.schmilblick) s.schmilblicks++;
@@ -80,41 +119,48 @@ function score(st: Stats, targetTurns: number) {
   return -2 * lengthMiss - 1.5 * st.noWinner + 0.5 * st.dramatic;
 }
 
-const table: Record<number, Record<keyof typeof LENGTHS, { cards: number; turns: number; deaths: number; noWinner: number }>> = {};
+type Row = Record<keyof typeof LENGTHS, { cards: number; turns: number; deaths: number; noWinner: number }>;
+const table = {} as Record<Mode, Record<number, Row>>;
 
-for (let n = MIN_PLAYERS; n <= MAX_PLAYERS; n++) {
-  table[n] = {} as (typeof table)[number];
-  let floor = 10;
-  const ceiling = simulate(n, 5001).turns; // mean turns when the deck never runs out
-  for (const [name, { perPlayer, ceiling: share }] of Object.entries(LENGTHS) as [
-    keyof typeof LENGTHS,
-    (typeof LENGTHS)[keyof typeof LENGTHS],
-  ][]) {
-    const target = Math.min(perPlayer * n, share * ceiling);
-    let best = { deck: 0, s: -Infinity, st: null as Stats | null };
-    // Each length must use more cards than the one before it.
-    for (let deck = floor; deck <= Math.max(floor + 60, Math.round(target * 4.5 * 1.4)); deck++) {
-      if (isDeathDeck(deck)) continue;
-      const st = simulate(n, deck);
-      const sc = score(st, target);
-      if (sc > best.s) best = { deck, s: sc, st };
+for (const mode of MODES) {
+  table[mode] = {};
+  console.log(`== ${mode}`);
+  for (let n = MIN_PLAYERS; n <= MAX_PLAYERS; n++) {
+    table[mode][n] = {} as Row;
+    let floor = 10;
+    const ceiling = simulate(n, 5001, mode).turns; // mean turns when the deck never runs out
+    for (const [name, { perPlayer, ceiling: share }] of Object.entries(LENGTHS) as [
+      keyof typeof LENGTHS,
+      (typeof LENGTHS)[keyof typeof LENGTHS],
+    ][]) {
+      const target = Math.min(perPlayer * n, share * ceiling);
+      let best = { deck: 0, s: -Infinity, st: null as Stats | null };
+      // Each length must use more cards than the one before it.
+      for (let deck = floor; deck <= Math.max(floor + 60, Math.round(target * 4.5 * 1.4)); deck++) {
+        if (isDeathDeck(deck)) continue;
+        const st = simulate(n, deck, mode);
+        const sc = score(st, target);
+        if (sc > best.s) best = { deck, s: sc, st };
+      }
+      const st = best.st!;
+      table[mode][n][name] = {
+        cards: best.deck,
+        turns: +st.turns.toFixed(1),
+        deaths: +st.deaths.toFixed(2),
+        noWinner: +st.noWinner.toFixed(3),
+      };
+      floor = best.deck + Math.max(5, n * 2);
+      console.log(
+        `${String(n).padStart(2)}p ${name.padEnd(6)} cards=${String(best.deck).padStart(3)} turns=${st.turns.toFixed(1).padStart(5)} (target ${target.toFixed(1)}, ceiling ${ceiling.toFixed(1)}) deaths=${st.deaths.toFixed(2)} noWinner=${(st.noWinner * 100).toFixed(1)}% dramatic=${(st.dramatic * 100).toFixed(1)}% drinks=${st.schmilblicks.toFixed(2)}`,
+      );
     }
-    const st = best.st!;
-    table[n][name] = {
-      cards: best.deck,
-      turns: +st.turns.toFixed(1),
-      deaths: +st.deaths.toFixed(2),
-      noWinner: +st.noWinner.toFixed(3),
-    };
-    floor = best.deck + Math.max(5, n * 2);
-    console.log(
-      `${String(n).padStart(2)}p ${name.padEnd(6)} cards=${String(best.deck).padStart(3)} turns=${st.turns.toFixed(1).padStart(5)} (target ${target.toFixed(1)}, ceiling ${ceiling.toFixed(1)}) deaths=${st.deaths.toFixed(2)} noWinner=${(st.noWinner * 100).toFixed(1)}% dramatic=${(st.dramatic * 100).toFixed(1)}% drinks=${st.schmilblicks.toFixed(2)}`,
-    );
   }
 }
 
 const out = `// Generated by scripts/tune-decks.ts. Run \`pnpm tune\` to rebuild.
 // cards: starting deck, turns: mean total turns, deaths: mean deaths, noWinner: share of games nobody wins.
+
+import type { Mode } from "./rules";
 
 export type GameLength = "short" | "medium" | "long";
 
@@ -125,6 +171,6 @@ export interface DeckPreset {
   noWinner: number;
 }
 
-export const DECK_TABLE: Record<number, Record<GameLength, DeckPreset>> = ${JSON.stringify(table, null, 2)};
+export const DECK_TABLE: Record<Mode, Record<number, Record<GameLength, DeckPreset>>> = ${JSON.stringify(table, null, 2)};
 `;
 writeFileSync(new URL("../src/shared/deckTable.ts", import.meta.url), out);

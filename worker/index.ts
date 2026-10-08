@@ -284,7 +284,7 @@ export class Lobby extends DurableObject<Env> {
       p.alive = !p.spectator;
       p.cards = 0;
     }
-    const deck = DECK_TABLE[seated.length][s.length].cards;
+    const deck = DECK_TABLE.hasard[seated.length][s.length].cards;
     const first = seated[rng(seated.length)];
     s.phase = "playing";
     s.game = {
