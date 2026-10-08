@@ -1,13 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { AFK_MS, BEATS, type LobbyState, type PublicPlayer, type SeqPlay } from "../shared/protocol";
-import { DEATH_DECK_DIVISOR, isDeathDeck, MAX_TAKE, type Dir } from "../shared/rules";
+import { BIDULE_CARD, DEATH_DECK_DIVISOR, isDeathDeck, legalCards, MAX_TAKE, nextAlive, type Dir } from "../shared/rules";
 import { accentVar, ArrowIcon, CardBack, Crown, CuteCard, Die, Ghost, Mug } from "./art";
 import { Avatar } from "./LobbyPage";
 import { Sheet } from "./Sheet";
 import type { useLobby } from "./useLobby";
 
-type Beat = "d8" | "fly" | "death" | "blick" | "schmilblick" | "pass";
-const ORDER: Beat[] = ["d8", "fly", "death", "blick", "schmilblick", "pass"];
+// "d8" is the take reveal: the d8 tumbling in Hasard, the played card flipping in Tactique.
+type Beat = "d8" | "fly" | "death" | "bidule" | "blick" | "schmilblick" | "pass";
+const ORDER: Beat[] = ["d8", "fly", "death", "bidule", "blick", "schmilblick", "pass"];
 
 interface Anim {
   play: SeqPlay;
@@ -33,6 +34,7 @@ function usePlayAnimation(lastPlay: SeqPlay | null) {
       ["fly", BEATS.fly],
     ];
     if (lastPlay.death) beats.push(["death", BEATS.death]);
+    if (lastPlay.bidule) beats.push(["bidule", BEATS.bidule]);
     if (lastPlay.schmilRoll !== null) beats.push(["blick", BEATS.schmilRoll]);
     if (lastPlay.schmilblick) beats.push(["schmilblick", BEATS.schmilblick]);
     if (lastPlay.nextId) beats.push(["pass", BEATS.pass]);
@@ -191,7 +193,17 @@ function useNow(active: boolean) {
   return now;
 }
 
-function PlaysLog({ log, byId, nameOf }: { log: SeqPlay[]; byId: Map<string, PublicPlayer>; nameOf: (id: string | null) => string }) {
+function PlaysLog({
+  log,
+  byId,
+  nameOf,
+  verb,
+}: {
+  log: SeqPlay[];
+  byId: Map<string, PublicPlayer>;
+  nameOf: (id: string | null) => string;
+  verb: "rolled" | "played";
+}) {
   if (log.length === 0) return <p className="cn-meta panel-body">Nothing yet.</p>;
   return (
     <ol className="cn-list-none cn-m-0 cn-divide sb-log">
@@ -205,11 +217,12 @@ function PlaysLog({ log, byId, nameOf }: { log: SeqPlay[]; byId: Map<string, Pub
                 {who?.name ?? "?"} took {p.took}
               </div>
               <div className="cn-meta">
-                rolled {p.roll} · {p.remaining} left{p.dir ? ` · ${p.dir} to ${nameOf(p.nextId)}` : ""}
+                {verb} {p.roll} · {p.remaining} left{p.dir ? ` · ${p.dir} to ${nameOf(p.nextId)}` : ""}
               </div>
             </div>
             <div className="cn-row sb-log-tags">
               {p.death && <span className="tag cn-tone-red">Death</span>}
+              {p.bidule && <span className="tag cn-tone-peach">Bidule</span>}
               {p.schmilblick && <span className="tag cn-tone-yellow">Schmilblick</span>}
               {p.ending?.kind === "lastCard" && <span className="tag cn-tone-green">Win</span>}
             </div>
@@ -237,8 +250,24 @@ function NextGame({ players }: { players: PublicPlayer[] }) {
   );
 }
 
-export function Game({ state, you, send }: { state: LobbyState; you: string; send: ReturnType<typeof useLobby>["send"] }) {
+/** True on touch screens, where a first tap previews a card and a second tap plays it.
+    A tap also fires mouseenter and focus, so those only preview on devices that can hover. */
+const noHover = () => typeof matchMedia === "function" && matchMedia("(hover: none)").matches;
+
+export function Game({
+  state,
+  you,
+  hand,
+  send,
+}: {
+  state: LobbyState;
+  you: string;
+  hand: number[] | null;
+  send: ReturnType<typeof useLobby>["send"];
+}) {
   const g = state.game!;
+  const tactique = g.mode === "tactique";
+  const [preview, setPreview] = useState<number | null>(null);
   const byId = useMemo(() => new Map(state.players.map((p) => [p.id, p])), [state.players]);
   const seats = g.seats.map((id) => byId.get(id)).filter(Boolean) as PublicPlayer[];
   const anim = usePlayAnimation(g.lastPlay);
@@ -285,18 +314,49 @@ export function Game({ state, you, send }: { state: LobbyState; you: string; sen
   const myTurn = state.phase === "playing" && !anim && g.currentId === you;
   const canRoll = myTurn && now >= readyAt - 300;
   const afkLeft = Math.ceil((readyAt + AFK_MS - now) / 1000);
+  const legal = tactique && hand ? legalCards(hand, g.deck, g.deckState) : [];
+  const playCard = (card: number) => {
+    setPreview(null);
+    send({ t: "play", card });
+  };
+  useEffect(() => setPreview(null), [g.currentId, g.lastPlay?.seq]);
 
   useEffect(() => {
     if (!canRoll) return;
     const onKey = (e: KeyboardEvent) => {
-      if ((e.key === " " || e.key === "Enter") && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLButtonElement)) {
+      if (e.target instanceof HTMLInputElement) return;
+      if (tactique) {
+        // 1, 2, 3 play the cards in your hand from left to right.
+        const card = hand?.[Number(e.key) - 1];
+        if (card !== undefined && legal.includes(card)) playCard(card);
+        return;
+      }
+      if ((e.key === " " || e.key === "Enter") && !(e.target instanceof HTMLButtonElement)) {
         e.preventDefault();
         send({ t: "roll" });
       }
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [canRoll, send]);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** What playing `card` would do, for the hover preview. */
+  const previewText = (card: number) => {
+    const deadly = g.deckState === "returned" || (g.deckState === "normal" && isDeathDeck(g.deck));
+    const bidule = g.deckState === "normal" && deadly && card === BIDULE_CARD;
+    const remaining = g.deck - Math.min(card, g.deck);
+    if (remaining === 0) return deadly && !bidule ? "Takes the last cards, but you're out. Nobody wins." : "Takes the last cards. You win!";
+    const dir: Dir = remaining % 2 ? "left" : "right";
+    const next = nextAlive(
+      seats.map((p) => ({ id: p.id, alive: p.alive })),
+      you,
+      dir,
+    );
+    const to = nameOf(next.id);
+    if (bidule) return `Bidule! Sends ${remaining} back to ${to}.`;
+    const lethal = !deadly && isDeathDeck(remaining);
+    return `Leaves ${remaining}, ${dir} to ${to}.${lethal ? ` Death deck for ${to} 💀` : ""}${deadly ? " Then you're out." : ""}`;
+  };
 
   // ---- caption ----
   let caption: React.ReactNode;
@@ -304,18 +364,30 @@ export function Game({ state, you, send }: { state: LobbyState; you: string; sen
     const who = nameOf(play.playerId);
     switch (anim.beat) {
       case "d8":
-        caption = `${who} rolls the d8…`;
+        caption = tactique ? `${who} plays a ${play.roll}.` : `${who} rolls the d8…`;
         break;
       case "fly":
         caption =
-          play.took < play.roll ? `Rolled ${play.roll}, but only ${play.took} left. ${who} takes them all.` : `${who} takes ${play.took}.`;
+          play.took < play.roll
+            ? `${tactique ? "Played" : "Rolled"} ${play.roll}, but only ${play.took} left. ${who} takes them all.`
+            : `${who} takes ${play.took}.`;
         break;
       case "death":
-        caption = (
-          <>
-            <b>Death deck.</b> {play.received} is {DEATH_DECK_DIVISOR} × {play.received / DEATH_DECK_DIVISOR}, so {who} is out.
-          </>
-        );
+        caption =
+          play.receivedState === "returned" ? (
+            <>
+              <b>Bidule'd.</b> {who} can't block a deck that came back, so {who} is out.
+            </>
+          ) : (
+            <>
+              <b>Death deck.</b> {play.received} is {DEATH_DECK_DIVISOR} × {play.received / DEATH_DECK_DIVISOR}, so {who} is out.
+            </>
+          );
+        break;
+      case "bidule":
+        caption = play.nextId
+          ? `Bidule! ${who} blocks with a 7 and sends it back to ${nameOf(play.nextId)}.`
+          : `Bidule! ${who} blocks with a 7.`;
         break;
       case "blick":
         caption = `The d${g.sides} tumbles. A ${g.sides} means Schmilblick…`;
@@ -339,14 +411,24 @@ export function Game({ state, you, send }: { state: LobbyState; you: string; sen
   } else if (ending) {
     caption = null;
   } else if (g.currentId) {
-    const who = g.currentId === you ? "Your" : `${nameOf(g.currentId)}'s`;
-    caption = isDeathDeck(g.deck) ? (
-      <>
-        {who} turn, holding {g.deck}. <b className="cn-text-red">Death deck 💀</b>
-      </>
-    ) : (
-      `${who} turn, holding ${g.deck}.`
-    );
+    const mine = g.currentId === you;
+    const who = mine ? "Your" : `${nameOf(g.currentId)}'s`;
+    if (tactique && mine && preview !== null) caption = previewText(preview);
+    else if (g.deckState === "returned")
+      caption = (
+        <>
+          {who} turn, holding {g.deck}. <b className="cn-text-red">Bidule'd 💀</b>
+          {mine && " Play your last card."}
+        </>
+      );
+    else if (g.deckState === "normal" && isDeathDeck(g.deck))
+      caption = (
+        <>
+          {who} turn, holding {g.deck}. <b className="cn-text-red">Death deck 💀</b>
+          {mine && tactique && (hand?.includes(BIDULE_CARD) ? " Play your 7 for a Bidule!" : " No 7, so this is your last card.")}
+        </>
+      );
+    else caption = `${who} turn, holding ${g.deck}.`;
   }
 
   const tableDead = seats.filter((p) => !looksAlive(p)).length;
@@ -369,6 +451,7 @@ export function Game({ state, you, send }: { state: LobbyState; you: string; sen
             <span className="cn-meta">{log.length}</span>
           </button>
           <span className="cn-meta sb-table-facts">
+            {tactique ? "Tactique · " : ""}
             {g.startDeck} cards · d{g.sides} · {tableDead} out
           </span>
         </div>
@@ -425,7 +508,11 @@ export function Game({ state, you, send }: { state: LobbyState; you: string; sen
               </div>
 
               <div className="sb-dice" style={accentVar(byId.get(holder ?? "")?.accent ?? "mauve")}>
-                <RollingDie sides={MAX_TAKE} rolling={anim?.beat === "d8"} value={play ? play.roll : null} />
+                {tactique ? (
+                  play && <CuteCard key={play.seq} n={play.roll} value={play.roll} className="sb-played" />
+                ) : (
+                  <RollingDie sides={MAX_TAKE} rolling={anim?.beat === "d8"} value={play ? play.roll : null} />
+                )}
                 {play && play.schmilRoll !== null && reached(anim, "blick") && (
                   <RollingDie sides={g.sides} rolling={anim?.beat === "blick"} value={play.schmilRoll} hot={play.schmilblick} />
                 )}
@@ -439,7 +526,37 @@ export function Game({ state, you, send }: { state: LobbyState; you: string; sen
 
           {state.phase === "playing" && !anim && (
             <div className="sb-turn-actions">
-              {myTurn ? (
+              {tactique && hand ? (
+                <>
+                  <div className={`sb-hand${canRoll ? " is-live" : ""}`} role="group" aria-label="Your hand">
+                    {hand.map((card, i) => {
+                      const playable = canRoll && legal.includes(card);
+                      return (
+                        <button
+                          key={`${i}-${card}`}
+                          type="button"
+                          className={`sb-hand-card${preview === card ? " is-picked" : ""}${card === BIDULE_CARD && playable && legal.length === 1 ? " is-bidule" : ""}`}
+                          disabled={!playable}
+                          aria-label={`Play ${card}`}
+                          onMouseEnter={() => playable && !noHover() && setPreview(card)}
+                          onMouseLeave={() => !noHover() && setPreview(null)}
+                          onFocus={() => playable && !noHover() && setPreview(card)}
+                          onClick={() => (noHover() && preview !== card ? setPreview(card) : playCard(card))}
+                        >
+                          <CuteCard n={card} value={card} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {myTurn ? (
+                    afkLeft <= 10 && afkLeft > 0 && <span className="cn-meta">Auto-plays in {afkLeft}s</span>
+                  ) : (
+                    <span className="cn-row cn-meta">
+                      <span className="spinner" aria-hidden="true" /> Waiting for {nameOf(g.currentId)}
+                    </span>
+                  )}
+                </>
+              ) : myTurn ? (
                 <>
                   <button type="button" className="btn btn-primary sb-roll" disabled={!canRoll} onClick={() => send({ t: "roll" })}>
                     Roll the d8
@@ -524,6 +641,12 @@ export function Game({ state, you, send }: { state: LobbyState; you: string; sen
           </div>
         )}
 
+        {anim?.beat === "bidule" && (
+          <div className="sb-schmilblick is-bidule" aria-hidden="true">
+            <span>Bidule!</span>
+          </div>
+        )}
+
         {winner && <Confetti />}
       </div>
 
@@ -531,11 +654,12 @@ export function Game({ state, you, send }: { state: LobbyState; you: string; sen
         <div className="panel-header">
           <h2>Plays</h2>
           <span className="cn-meta">
+            {tactique ? "Tactique · " : ""}
             {g.startDeck} cards · d{g.sides} · {tableDead} out
           </span>
         </div>
         <div className="sb-side-scroll scroll-well">
-          <PlaysLog log={log} byId={byId} nameOf={nameOf} />
+          <PlaysLog log={log} byId={byId} nameOf={nameOf} verb={tactique ? "played" : "rolled"} />
         </div>
         {watching.length > 0 && (
           <div className="panel-footer">
@@ -545,7 +669,7 @@ export function Game({ state, you, send }: { state: LobbyState; you: string; sen
       </aside>
 
       <Sheet kind="drawer" title="Plays" open={logOpen} onClose={() => setLogOpen(false)}>
-        <PlaysLog log={log} byId={byId} nameOf={nameOf} />
+        <PlaysLog log={log} byId={byId} nameOf={nameOf} verb={tactique ? "played" : "rolled"} />
         {watching.length > 0 && (
           <div className="panel-footer">
             <NextGame players={watching} />

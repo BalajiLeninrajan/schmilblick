@@ -246,7 +246,7 @@ function Room({ state, you, send }: { state: LobbyState; you: string; send: Send
 }
 
 export function LobbyPage({ code }: { code: string }) {
-  const { state, you, conn, error, send } = useLobby(code);
+  const { state, you, hand, conn, error, send } = useLobby(code);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -316,7 +316,7 @@ export function LobbyPage({ code }: { code: string }) {
         ) : state.phase === "lobby" ? (
           joined && <Room state={state} you={you} send={send} />
         ) : (
-          <Game state={state} you={you} send={send} />
+          <Game state={state} you={you} hand={hand} send={send} />
         )}
       </main>
 
