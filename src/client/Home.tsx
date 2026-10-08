@@ -1,15 +1,35 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CODE_ALPHABET, CODE_LENGTH, NAME_MAX, isCode } from "../shared/protocol";
 import { navigate, Wordmark } from "./App";
 import { ArrowIcon, CuteCard } from "./art";
 import { Rules, RulesButton } from "./Sheet";
 import { saveName, savedName } from "./useLobby";
 
+/** Sets data-more on a scroll box while there's content below the fold, so CSS can fade its bottom edge. */
+function useMoreBelow<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => el.toggleAttribute("data-more", el.scrollTop + el.clientHeight < el.scrollHeight - 2);
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", update);
+      ro.disconnect();
+    };
+  }, []);
+  return ref;
+}
+
 type Mode = "choose" | "create" | "join";
 type ErrField = "name" | "code" | "form";
 
 export function Home() {
   const [mode, setMode] = useState<Mode>("choose");
+  const rulesRef = useMoreBelow<HTMLDivElement>();
   const [name, setName] = useState(savedName());
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -157,7 +177,7 @@ export function Home() {
             <div className="panel-header">
               <h2>How to play</h2>
             </div>
-            <div className="panel-body sb-rules-scroll scroll-well">
+            <div ref={rulesRef} className="panel-body sb-rules-scroll scroll-well">
               <Rules />
             </div>
           </section>

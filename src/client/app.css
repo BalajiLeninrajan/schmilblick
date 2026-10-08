@@ -101,10 +101,14 @@
 
 /* Wide screens: the home page fills main exactly, and the rules scroll inside the tilted card. */
 @media (width > 1060px) {
-  .sb-home {
+  /* The page fits by design and only the rules card scrolls, so main must not scroll or clip here:
+     the tilted card's rotated corner and plate reach past the column. #root raises the specificity
+     over the #root > main fallback. */
+  #root > main.sb-home {
     display: flex;
     flex-direction: column;
     min-height: 0;
+    overflow: visible;
   }
 
   .sb-home-grid {
@@ -123,6 +127,11 @@
   .sb-rules-scroll {
     min-height: 0;
     overflow-y: auto;
+  }
+
+  /* fade the bottom edge while there's more to read below */
+  .sb-rules-scroll[data-more] {
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 48px), transparent);
   }
 }
 
