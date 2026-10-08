@@ -33,6 +33,7 @@ export type Conn = "connecting" | "open" | "closed" | "missing";
 export function useLobby(code: string) {
   const [state, setState] = useState<LobbyState | null>(null);
   const [you, setYou] = useState<string>("");
+  const [hand, setHand] = useState<number[] | null>(null);
   const [conn, setConn] = useState<Conn>("connecting");
   const [error, setError] = useState<{ message: string; at: number } | null>(null);
   const ws = useRef<WebSocket | null>(null);
@@ -65,6 +66,7 @@ export function useLobby(code: string) {
         if (msg.t === "state") {
           setState(msg.state);
           setYou(msg.you);
+          setHand(msg.hand);
           // A returning name joins on its own.
           const name = savedName();
           if (msg.you.startsWith("pending:") && name) sock.send(JSON.stringify({ t: "join", name } satisfies ClientMsg));
@@ -91,5 +93,5 @@ export function useLobby(code: string) {
     ws.current?.send(JSON.stringify(msg));
   }, []);
 
-  return { state, you, conn, error, send };
+  return { state, you, hand, conn, error, send };
 }

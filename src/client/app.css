@@ -99,6 +99,33 @@
   margin-top: var(--space-5);
 }
 
+/* Wide screens: the home page fills main exactly, and the rules scroll inside the tilted card. */
+@media (width > 1060px) {
+  .sb-home {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .sb-home-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .sb-rules-card {
+    display: flex;
+    flex-direction: column;
+    max-height: 100%;
+    min-height: 0;
+  }
+
+  .sb-rules-scroll {
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
 /* Big screens get two columns: play beside the rules, players beside settings, the table beside the log. */
 @media (width > 1060px) {
   .sb-two-col {

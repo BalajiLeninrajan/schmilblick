@@ -153,11 +153,11 @@ export function Home() {
             )}
           </section>
 
-          <section className="panel is-tilted sb-wide-only">
+          <section className="panel is-tilted sb-wide-only sb-rules-card">
             <div className="panel-header">
               <h2>How to play</h2>
             </div>
-            <div className="panel-body">
+            <div className="panel-body sb-rules-scroll scroll-well">
               <Rules />
             </div>
           </section>

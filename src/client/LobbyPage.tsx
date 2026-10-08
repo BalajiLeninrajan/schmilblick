@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { DECK_TABLE, type GameLength } from "../shared/deckTable";
 import { NAME_MAX, type LobbyState, type PublicPlayer } from "../shared/protocol";
-import { MAX_PLAYERS, MIN_PLAYERS, type SchmilblickDie } from "../shared/rules";
+import { MAX_PLAYERS, MIN_PLAYERS, type Mode, type SchmilblickDie } from "../shared/rules";
 import { navigate, Wordmark } from "./App";
 import { accentVar, CopyIcon, Crown, CuteCard, LockIcon } from "./art";
 import { Game } from "./Game";
@@ -83,6 +83,11 @@ const LENGTHS: { id: GameLength; label: string }[] = [
 
 const DICE: SchmilblickDie[] = [4, 6, 8, 10];
 
+export const MODE_COPY: Record<Mode, { label: string; hint: string }> = {
+  hasard: { label: "Hasard", hint: "dice" },
+  tactique: { label: "Tactique", hint: "cards" },
+};
+
 function Room({ state, you, send }: { state: LobbyState; you: string; send: Send }) {
   const [renaming, setRenaming] = useState(false);
   const isHost = state.hostId === you;
@@ -90,7 +95,7 @@ function Room({ state, you, send }: { state: LobbyState; you: string; send: Send
   const online = seated.filter((p) => p.connected).length;
   const me = state.players.find((p) => p.id === you);
   const count = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, seated.length));
-  const row = DECK_TABLE.hasard[count];
+  const row = DECK_TABLE[state.mode][count];
   const host = state.players.find((p) => p.id === state.hostId);
 
   return (
@@ -141,6 +146,22 @@ function Room({ state, you, send }: { state: LobbyState; you: string; send: Send
           {isHost ? (
             <>
               <div className="cn-stack cn-gap-8">
+                <span className="cn-label">Mode</span>
+                <div
+                  className="segmented sb-seg-row sb-seg-stack"
+                  role="group"
+                  aria-label="Mode"
+                  style={{ "--n": 2 } as React.CSSProperties}
+                >
+                  {(Object.keys(MODE_COPY) as Mode[]).map((m) => (
+                    <button key={m} type="button" aria-pressed={state.mode === m} onClick={() => send({ t: "mode", mode: m })}>
+                      <b>{MODE_COPY[m].label}</b>
+                      <small>{MODE_COPY[m].hint}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="cn-stack cn-gap-8">
                 <span className="cn-label">Length</span>
                 <div
                   className="segmented sb-seg-row sb-seg-stack"
@@ -179,6 +200,10 @@ function Room({ state, you, send }: { state: LobbyState; you: string; send: Send
             </>
           ) : (
             <dl className="kv cn-m-0">
+              <dt>Mode</dt>
+              <dd>
+                {MODE_COPY[state.mode].label} · {MODE_COPY[state.mode].hint}
+              </dd>
               <dt>Length</dt>
               <dd>
                 {LENGTHS.find((l) => l.id === state.length)?.label} · {row[state.length].cards} cards
