@@ -1,3 +1,4 @@
+import posthog from "posthog-js";
 import { useEffect, useState } from "react";
 import { DECK_TABLE, type GameLength } from "../shared/deckTable";
 import { NAME_MAX, type LobbyState, type PublicPlayer } from "../shared/protocol";
@@ -36,7 +37,12 @@ function ShareCode({ code }: { code: string }) {
       type="button"
       className="chip sb-code-chip"
       data-tip={copied ? "Copied" : "Copy invite link"}
-      onClick={() => navigator.clipboard?.writeText(url).then(() => setCopied(true))}
+      onClick={() =>
+        navigator.clipboard?.writeText(url).then(() => {
+          setCopied(true);
+          posthog.capture("copy_link", { page: "lobby" });
+        })
+      }
     >
       <span className="cn-code">{code}</span>
       <CopyIcon />
@@ -216,7 +222,15 @@ function Room({ state, you, send }: { state: LobbyState; you: string; send: Send
         <div className="panel-footer">
           {isHost ? (
             <>
-              <button type="button" className="btn btn-primary" disabled={online < MIN_PLAYERS} onClick={() => send({ t: "start" })}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={online < MIN_PLAYERS}
+                onClick={() => {
+                  send({ t: "start" });
+                  posthog.capture("start_game", { mode: state.mode, length: state.length, sides: state.sides, players: online });
+                }}
+              >
                 Deal the deck
               </button>
               {online < MIN_PLAYERS && <span className="cn-meta">Waiting for a second player</span>}
@@ -287,7 +301,8 @@ export function LobbyPage({ code }: { code: string }) {
         </div>
       </header>
 
-      <main className={inGame && !needsName ? "sb-stage" : "page-main is-narrow page-enter sb-lobby"}>
+      {/* ph-sensitive: autocapture still counts clicks in here, but drops their text and attributes, which carry player names. */}
+      <main className={`${inGame && !needsName ? "sb-stage" : "page-main is-narrow page-enter sb-lobby"} ph-sensitive`}>
         {conn === "missing" ? (
           <div className="empty-state">
             <CuteCard n={2} className="sb-empty-card" />
@@ -311,7 +326,14 @@ export function LobbyPage({ code }: { code: string }) {
                 <p className="banner cn-tone-blue cn-m-0">This table is mid-game or full. You'll watch, and sit in for the next one.</p>
               </div>
             )}
-            <NameForm initial={savedName()} submitLabel="Join" onSubmit={(name) => send({ t: "join", name })} />
+            <NameForm
+              initial={savedName()}
+              submitLabel="Join"
+              onSubmit={(name) => {
+                send({ t: "join", name });
+                posthog.capture("join_room", { via: "link" });
+              }}
+            />
           </section>
         ) : state.phase === "lobby" ? (
           joined && <Room state={state} you={you} send={send} />
