@@ -19,16 +19,19 @@ import {
 } from "../src/shared/protocol";
 import {
   DEFAULT_SCHMILBLICK_DIE,
-  HAND_SIZE,
   MAX_PLAYERS,
   MIN_PLAYERS,
   MODES,
   SCHMILBLICK_DICE,
-  drawCard,
-  legalCards,
+  dealHand,
+  legalMoves,
+  playFromHand,
   playTurn,
   resolveTurn,
+  sameMove,
   type DeckState,
+  type Dir,
+  type Move,
   type Mode,
   type Rng,
   type SchmilblickDie,
@@ -55,13 +58,14 @@ interface Stored {
   hostId: string | null;
   players: Player[];
   game:
-    | (Omit<GameState, "readyIn" | "sides" | "mode" | "deckState"> & {
+    | (Omit<GameState, "readyIn" | "sides" | "mode" | "deckState" | "handSizes"> & {
         readyAt: number;
         seq: number;
         sides?: SchmilblickDie;
         mode?: Mode;
         deckState?: DeckState;
         hands?: Record<string, number[]>; // Tactique hands, never broadcast
+        bags?: Record<string, number[]>; // what's left of each player's Tactique bag, never broadcast
       })
     | null;
 }
@@ -86,6 +90,13 @@ const randomId = (len = 10) => {
   const abc = "abcdefghijklmnopqrstuvwxyz0123456789";
   return Array.from({ length: len }, () => abc[rng(abc.length)]).join("");
 };
+
+/** Fresh bags for each player, and the first hand out of each. */
+function tactiqueDeal(ids: string[]) {
+  const bags: Record<string, number[]> = Object.fromEntries(ids.map((id) => [id, []]));
+  const hands = Object.fromEntries(ids.map((id) => [id, dealHand(bags[id], rng)]));
+  return { hands, bags };
+}
 
 const cleanName = (raw: unknown) => (typeof raw === "string" ? raw.replace(/\s+/g, " ").trim().slice(0, NAME_MAX) : "");
 
@@ -275,9 +286,10 @@ export class Lobby extends DurableObject<Env> {
         if (s.phase !== "playing" || !g || g.mode !== "tactique") return;
         if (g.currentId !== me.id) return "Not your turn.";
         if (Date.now() < g.readyAt - 400) return;
-        const hand = g.hands?.[me.id] ?? [];
-        if (!legalCards(hand, g.deck, g.deckState ?? "normal").includes(msg.card)) return "You can't play that card.";
-        this.advance(msg.card);
+        if (!Array.isArray(msg.cards)) return;
+        const move = legalMoves(g.hands?.[me.id] ?? [], g.deck, g.deckState ?? "normal").find((m) => sameMove(m, msg.cards));
+        if (!move) return "You can't play that.";
+        this.advance(move, msg.dir === "left" || msg.dir === "right" ? msg.dir : undefined);
         return this.commit();
       }
       case "lobby": {
@@ -336,15 +348,12 @@ export class Lobby extends DurableObject<Env> {
       sides: s.sides ?? DEFAULT_SCHMILBLICK_DIE,
       mode,
       deckState: "normal",
-      hands:
-        mode === "tactique"
-          ? Object.fromEntries(seated.map((p) => [p.id, Array.from({ length: HAND_SIZE }, () => drawCard(rng))]))
-          : undefined,
+      ...(mode === "tactique" && tactiqueDeal(seated.map((p) => p.id))),
     };
   }
 
-  /** Plays the current turn: a d8 roll in Hasard, or `card` in Tactique (a random legal card when the player is AFK). */
-  private advance(card?: number) {
+  /** Plays the current turn: a d8 roll in Hasard, or `move` in Tactique (a random legal move when the player is AFK). */
+  private advance(move?: Move, steer?: Dir) {
     const s = this.s!;
     const g = s.game!;
     const seats = g.seats.map((id) => s.players.find((p) => p.id === id)!);
@@ -353,12 +362,11 @@ export class Lobby extends DurableObject<Env> {
     if (g.mode === "tactique") {
       const hand = (g.hands ??= {})[g.currentId!] ?? [];
       const state = g.deckState ?? "normal";
-      const legal = legalCards(hand, g.deck, state);
-      const value = card ?? legal[rng(legal.length)];
-      play = resolveTurn(seats, g.currentId!, g.deck, state, value, "tactique", rng, sides);
-      hand.splice(hand.indexOf(value), 1);
+      const legal = legalMoves(hand, g.deck, state);
+      const cards = move ?? legal[rng(legal.length)];
+      play = resolveTurn(seats, g.currentId!, g.deck, state, cards, "tactique", rng, sides, steer);
       if (play.death) delete g.hands[g.currentId!];
-      else hand.push(drawCard(rng));
+      else playFromHand(hand, cards, ((g.bags ??= {})[g.currentId!] ??= []), rng);
       g.deckState = play.nextState;
     } else {
       play = playTurn(seats, g.currentId!, g.deck, rng, sides);
@@ -461,12 +469,13 @@ export class Lobby extends DurableObject<Env> {
     const s = this.s!;
     let game: GameState | null = null;
     if (s.game) {
-      const { readyAt, seq: _seq, hands: _hands, ...rest } = s.game;
+      const { readyAt, seq: _seq, hands, bags: _bags, ...rest } = s.game;
       game = {
         ...rest,
         sides: rest.sides ?? DEFAULT_SCHMILBLICK_DIE,
         mode: rest.mode ?? "hasard",
         deckState: rest.deckState ?? "normal",
+        handSizes: Object.fromEntries(Object.entries(hands ?? {}).map(([id, h]) => [id, h.length])),
         readyIn: Math.max(0, readyAt - Date.now()),
       };
     }

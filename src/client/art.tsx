@@ -60,6 +60,7 @@ function Face({ face }: { face: (typeof FACES)[number] }) {
 
 // Number cards (Tactique) keep one color per value. 7 is red: it's the Bidule card.
 const VALUE_TINTS = ["", "sky", "green", "teal", "yellow", "peach", "pink", "red", "lavender"] as const;
+export const valueTint = (value: number) => accentVar(VALUE_TINTS[value]);
 
 export function CuteCard({
   n,

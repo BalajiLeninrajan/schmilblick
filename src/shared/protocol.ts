@@ -1,5 +1,5 @@
 import type { GameLength } from "./deckTable";
-import type { DeckState, Ending, Mode, Play, SchmilblickDie } from "./rules";
+import type { DeckState, Dir, Ending, Mode, Play, SchmilblickDie } from "./rules";
 
 // Every accent token catppuccin-neu defines. A 12th player repeats the first color.
 export const ACCENTS = ["mauve", "peach", "green", "pink", "sky", "yellow", "red", "teal", "lavender", "blue", "rosewater"] as const;
@@ -32,6 +32,7 @@ export interface GameState {
   sides: SchmilblickDie; // the Schmilblick die for this game
   mode: Mode;
   deckState: DeckState; // how the deck the current player holds behaves (Tactique)
+  handSizes: Record<string, number>; // how many Tactique cards each live player holds
 }
 
 export interface LobbyState {
@@ -50,7 +51,7 @@ export type ClientMsg =
   | { t: "length"; length: GameLength }
   | { t: "die"; sides: SchmilblickDie }
   | { t: "mode"; mode: Mode }
-  | { t: "play"; card: number }
+  | { t: "play"; cards: number[]; dir?: Dir } // one card, or a pair that adds up to 7 for a Bidule. dir: where a 1 or an 8 sends it
   | { t: "start" }
   | { t: "roll" }
   | { t: "lobby" }
