@@ -1,3 +1,4 @@
+import posthog from "posthog-js";
 import { useEffect, useRef, useState } from "react";
 import { CODE_ALPHABET, CODE_LENGTH, NAME_MAX, isCode } from "../shared/protocol";
 import { navigate, Wordmark } from "./App";
@@ -51,6 +52,7 @@ export function Home() {
       const r = await fetch("/api/lobbies", { method: "POST" });
       const { code } = (await r.json()) as { code?: string };
       if (!code) throw new Error();
+      posthog.capture("create_room");
       navigate(`/${code}`);
     } catch {
       fail("form", "Couldn't make a room. Try again?");
@@ -71,6 +73,7 @@ export function Home() {
     setBusy(false);
     if (!info?.exists) return fail("code", `No room called ${c}.`);
     saveName(name.trim());
+    posthog.capture("join_room", { via: "code" });
     navigate(`/${c}`);
   }
 
