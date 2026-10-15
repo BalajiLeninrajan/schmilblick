@@ -17,21 +17,29 @@
 // which makes Tactique mostly a battle to be the last one alive. At 1.5x, players who attack half the
 // time they can still win by taking the last card in about 1 game in 10.
 // The recorded stats come from greedy bots: take the last cards when they can, attack whenever a card
-// leaves a death deck, Bidule whenever they can, and otherwise play a random card.
+// leaves a death deck, and Bidule whenever they can. Otherwise they play a random card other than a 7, the
+// way people hold on to theirs. A 1 or an 8 goes a random way, since they can't see who holds a 7.
 
 import { writeFileSync } from "node:fs";
 import {
-  HAND_SIZE,
+  BIDULE_CARD,
   MAX_PLAYERS,
   MIN_PLAYERS,
   MODES,
-  drawCard,
+  biduleCards,
+  canSteer,
+  dealHand,
+  handoffOf,
+  isDeadly,
   isDeathDeck,
   legalCards,
+  playFromHand,
   playTurn,
   resolveTurn,
   type DeckState,
+  type Handoff,
   type Mode,
+  type Play,
   type Rng,
   type SeatLike,
 } from "../src/shared/rules.ts";
@@ -65,14 +73,22 @@ interface Stats {
   schmilblicks: number;
 }
 
-function botCard(hand: number[], deck: number, state: DeckState, rng: Rng) {
-  const legal = legalCards(hand, deck, state);
-  const dying = state === "returned" || (state === "normal" && isDeathDeck(deck) && !legal.includes(7));
+function botCard(hand: number[], deck: number, state: DeckState, from: Handoff | null, rng: Rng) {
+  const legal = legalCards(hand, deck, state, from);
+  // On a deadly deck, the legal cards are all Bidules when there is one.
+  const dying = state === "returned" || (isDeadly(deck, state) && biduleCards(legal, from).length === 0);
   const win = legal.find((c) => c >= deck);
   if (win !== undefined && !dying) return win;
   const kill = legal.find((c) => c < deck && isDeathDeck(deck - c));
   if (kill !== undefined) return kill;
-  return legal[rng(legal.length)];
+  return keepSevens(legal, rng);
+}
+
+/** A random card, other than a 7 when there's a choice. */
+function keepSevens(cards: number[], rng: Rng) {
+  const rest = cards.filter((c) => c !== BIDULE_CARD);
+  const from = rest.length ? rest : cards;
+  return from[rng(from.length)];
 }
 
 function simulate(players: number, deck: number, mode: Mode): Stats {
@@ -84,17 +100,23 @@ function simulate(players: number, deck: number, mode: Mode): Stats {
     let d = deck;
     let state: DeckState = "normal";
     let deaths = 0;
+    let last: Play | null = null;
     // Only Tactique deals hands, so Hasard draws the same random numbers it always has.
-    const hands = mode === "tactique" ? seats.map(() => Array.from({ length: HAND_SIZE }, () => drawCard(rng))) : [];
+    const bags: Record<string, number[]> = Object.fromEntries(seats.map((p) => [p.id, []]));
+    const hands: Record<string, number[]> =
+      mode === "tactique" ? Object.fromEntries(seats.map((p) => [p.id, dealHand(bags[p.id], rng)])) : {};
     for (;;) {
       let p;
       if (mode === "hasard") p = playTurn(seats, cur, d, rng);
       else {
-        const hand = hands[+cur];
-        const card = botCard(hand, d, state, rng);
-        p = resolveTurn(seats, cur, d, state, card, mode, rng);
-        hand.splice(hand.indexOf(card), 1, drawCard(rng));
+        const hand = hands[cur];
+        const from = handoffOf(last, cur);
+        const card = botCard(hand, d, state, from, rng);
+        const steer = canSteer(card, d) ? (rng(2) ? "left" : "right") : undefined;
+        p = resolveTurn(seats, cur, d, state, card, mode, rng, undefined, { steer, from });
+        if (!p.death) playFromHand(hand, card, bags[cur], rng);
         state = p.nextState;
+        last = p;
       }
       s.turns++;
       if (p.death) deaths++;
