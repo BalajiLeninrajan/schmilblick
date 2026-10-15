@@ -85,7 +85,7 @@ export function Rules() {
         <h3 className="cn-name cn-m-0">Tactique</h3>
         <ul className="sb-rules cn-copy">
           <li>You're dealt 3 cards from 1 to 8 that only you can see. Once all 3 are gone, you're dealt 3 more.</li>
-          <li>Play a card to take that many.</li>
+          <li>Play a card to take that many. Or put it back on the deck to add that many: it scores nothing, but it can make a death deck.</li>
           <li>A 1 or an 8 lets you pick which way the deck goes.</li>
           <li>
             Handed a death deck? Play a 7, or the card that makes 7 with the one that made it, for a <b>Bidule</b>. The death deck goes
