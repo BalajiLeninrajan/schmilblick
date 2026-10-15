@@ -24,15 +24,15 @@ import {
   MODES,
   SCHMILBLICK_DICE,
   dealHand,
-  legalMoves,
+  handoffOf,
+  legalCards,
   playFromHand,
   playTurn,
   resolveTurn,
-  sameMove,
   type DeckState,
   type Dir,
-  type Move,
   type Mode,
+  type TurnChoice,
   type Rng,
   type SchmilblickDie,
 } from "../src/shared/rules";
@@ -286,10 +286,9 @@ export class Lobby extends DurableObject<Env> {
         if (s.phase !== "playing" || !g || g.mode !== "tactique") return;
         if (g.currentId !== me.id) return "Not your turn.";
         if (Date.now() < g.readyAt - 400) return;
-        if (!Array.isArray(msg.cards)) return;
-        const move = legalMoves(g.hands?.[me.id] ?? [], g.deck, g.deckState ?? "normal").find((m) => sameMove(m, msg.cards));
-        if (!move) return "You can't play that.";
-        this.advance(move, msg.dir === "left" || msg.dir === "right" ? msg.dir : undefined);
+        const legal = legalCards(g.hands?.[me.id] ?? [], g.deck, g.deckState ?? "normal", handoffOf(g.lastPlay, g.currentId));
+        if (!legal.includes(msg.card)) return "You can't play that card.";
+        this.advance(msg.card, { steer: msg.dir === "left" || msg.dir === "right" ? msg.dir : undefined });
         return this.commit();
       }
       case "lobby": {
@@ -352,8 +351,8 @@ export class Lobby extends DurableObject<Env> {
     };
   }
 
-  /** Plays the current turn: a d8 roll in Hasard, or `move` in Tactique (a random legal move when the player is AFK). */
-  private advance(move?: Move, steer?: Dir) {
+  /** Plays the current turn: a d8 roll in Hasard, or `card` in Tactique (a random legal card when the player is AFK). */
+  private advance(card?: number, choice: Omit<TurnChoice, "from"> = {}) {
     const s = this.s!;
     const g = s.game!;
     const seats = g.seats.map((id) => s.players.find((p) => p.id === id)!);
@@ -362,11 +361,12 @@ export class Lobby extends DurableObject<Env> {
     if (g.mode === "tactique") {
       const hand = (g.hands ??= {})[g.currentId!] ?? [];
       const state = g.deckState ?? "normal";
-      const legal = legalMoves(hand, g.deck, state);
-      const cards = move ?? legal[rng(legal.length)];
-      play = resolveTurn(seats, g.currentId!, g.deck, state, cards, "tactique", rng, sides, steer);
+      const from = handoffOf(g.lastPlay, g.currentId);
+      const legal = legalCards(hand, g.deck, state, from);
+      const value = card ?? legal[rng(legal.length)];
+      play = resolveTurn(seats, g.currentId!, g.deck, state, value, "tactique", rng, sides, { ...choice, from });
       if (play.death) delete g.hands[g.currentId!];
-      else playFromHand(hand, cards, ((g.bags ??= {})[g.currentId!] ??= []), rng);
+      else playFromHand(hand, value, ((g.bags ??= {})[g.currentId!] ??= []), rng);
       g.deckState = play.nextState;
     } else {
       play = playTurn(seats, g.currentId!, g.deck, rng, sides);

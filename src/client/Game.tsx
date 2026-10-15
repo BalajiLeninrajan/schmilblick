@@ -2,15 +2,16 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { AFK_MS, BEATS, type LobbyState, type PublicPlayer, type SeqPlay } from "../shared/protocol";
 import {
   BIDULE_CARD,
+  biduleCards,
   canSteer,
   DEATH_DECK_DIVISOR,
+  handoffOf,
   isDeadly,
   isDeathDeck,
-  legalMoves,
+  legalCards,
   MAX_TAKE,
   nextAlive,
   type Dir,
-  type Move,
 } from "../shared/rules";
 import { accentVar, ArrowIcon, CardBack, Crown, CuteCard, Die, Ghost, Mug, valueTint } from "./art";
 import { Avatar } from "./LobbyPage";
@@ -62,8 +63,6 @@ function usePlayAnimation(lastPlay: SeqPlay | null) {
 
   return anim;
 }
-
-const pairOf = (p: SeqPlay) => (p.cards?.length === 2 ? p.cards : null);
 
 const reached = (anim: Anim | null, beat: Beat) => !!anim && ORDER.indexOf(anim.beat) >= ORDER.indexOf(beat);
 
@@ -251,7 +250,7 @@ function PlaysLog({
                 {who?.name ?? "?"} took {p.took}
               </div>
               <div className="cn-meta">
-                {verb} {pairOf(p)?.join(" + ") ?? p.roll} · {p.remaining} left
+                {verb} {p.roll} · {p.remaining} left
                 {p.dir ? ` · ${p.steered ? "sent " : ""}${p.dir} to ${nameOf(p.nextId)}` : ""}
               </div>
             </div>
@@ -349,48 +348,37 @@ export function Game({
   const myTurn = state.phase === "playing" && !anim && g.currentId === you;
   const canRoll = myTurn && now >= readyAt - 300;
   const afkLeft = Math.ceil((readyAt + AFK_MS - now) / 1000);
-  const legal = tactique && hand ? legalMoves(hand, g.deck, g.deckState) : [];
-  // On a deadly deck you hold a Bidule for, the Bidules are your only moves.
-  const mustBidule =
-    g.deckState !== "returned" &&
-    isDeadly(g.deck, g.deckState) &&
-    legal.length > 0 &&
-    legal.every((m) => m.reduce((a, b) => a + b, 0) === BIDULE_CARD);
-  // The first card of a pair Bidule, waiting for the card that makes 7 with it.
-  const [half, setHalf] = useState<number | null>(null);
-  /** The move a click on `card` makes, or null when it starts (or cancels) a pair. */
-  const moveFor = (card: number): Move | null =>
-    half !== null ? (card === half ? null : [half, card]) : legal.some((m) => m.length === 1 && m[0] === card) ? [card] : null;
-  const canPick = (card: number) =>
-    canRoll && (half !== null ? card === half || card === BIDULE_CARD - half : legal.some((m) => m.includes(card)));
+  // Who handed you the deck, and with which card: a Bidule can make 7 with it.
+  const from = handoffOf(g.lastPlay, g.currentId);
+  const legal = tactique && hand ? legalCards(hand, g.deck, g.deckState, from) : [];
+  // On a death deck you hold a Bidule for, the Bidules are your only cards.
+  const mustBidule = g.deckState === "normal" && isDeathDeck(g.deck) && !!hand && biduleCards(hand, from).length > 0;
+  const canPick = (card: number) => canRoll && legal.includes(card);
   // A 1 or an 8 waiting for its player to pick which way the deck goes.
   const [aim, setAim] = useState<number | null>(null);
   const [aimDir, setAimDir] = useState<Dir | null>(null);
   const liveSeats = seats.map((p) => ({ id: p.id, alive: p.alive }));
   const neighbor = (dir: Dir) => nameOf(nextAlive(liveSeats, you, dir).id);
-  /** Whether playing `move` asks which way to send the deck. Not when both ways reach the same player. */
-  const steerable = (move: Move) =>
-    canSteer(move, g.deck) && nextAlive(liveSeats, you, "left").id !== nextAlive(liveSeats, you, "right").id;
+  /** Whether playing `card` asks which way to send the deck. Not for a Bidule, or when both ways reach the same player. */
+  const steerable = (card: number) =>
+    !mustBidule && canSteer(card, g.deck) && nextAlive(liveSeats, you, "left").id !== nextAlive(liveSeats, you, "right").id;
   const pick = (card: number) => {
     if (!canPick(card)) return;
-    const move = moveFor(card);
     setPreview(null);
-    if (move && steerable(move)) setAim(aim === card ? null : card);
-    else if (move) {
-      setHalf(null);
+    if (steerable(card)) setAim(aim === card ? null : card);
+    else {
       setAim(null);
-      send({ t: "play", cards: move });
-    } else setHalf(half === null ? card : null);
+      send({ t: "play", card });
+    }
   };
   const steer = (dir: Dir) => {
     if (aim === null) return;
     setAim(null);
     setAimDir(null);
-    send({ t: "play", cards: [aim], dir });
+    send({ t: "play", card: aim, dir });
   };
   useEffect(() => {
     setPreview(null);
-    setHalf(null);
     setAim(null);
     setAimDir(null);
   }, [g.currentId, g.lastPlay?.seq]);
@@ -400,12 +388,9 @@ export function Game({
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
       if (tactique) {
-        // 1, 2, 3... pick the cards in your hand from left to right. The arrow keys send a 1 or an 8 that way.
-        // Escape drops half a pair, or a 1 or an 8 waiting for a direction.
-        if (e.key === "Escape") {
-          setHalf(null);
-          setAim(null);
-        }
+        // 1, 2, 3 play the cards in your hand from left to right. The arrow keys send a 1 or an 8 that way,
+        // and Escape cancels it.
+        if (e.key === "Escape") setAim(null);
         if (aim !== null && (e.key === "ArrowLeft" || e.key === "ArrowRight")) steer(e.key === "ArrowLeft" ? "left" : "right");
         const card = hand?.[Number(e.key) - 1];
         if (card !== undefined) pick(card);
@@ -420,21 +405,18 @@ export function Game({
     return () => removeEventListener("keydown", onKey);
   }); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** What clicking `card` would do (sending it `dir`, for a 1 or an 8), for the hover preview. */
+  /** What playing `card` would do (sending it `dir`, for a 1 or an 8), for the hover preview. */
   const previewText = (card: number, dir?: Dir) => {
-    const move = moveFor(card);
-    if (!move) return half !== null ? "Put it back." : `Pair it with a ${BIDULE_CARD - card} for a Bidule.`;
-    const value = move.reduce((a, b) => a + b, 0);
     const deadly = isDeadly(g.deck, g.deckState);
-    const bidule = mustBidule && value === BIDULE_CARD;
-    const remaining = g.deck - Math.min(value, g.deck);
+    const bidule = mustBidule; // every card you can play is a Bidule then
+    const remaining = g.deck - Math.min(card, g.deck);
     if (remaining === 0) return deadly && !bidule ? "Takes the last cards, but you're out. Nobody wins." : "Takes the last cards. You win!";
     const lethal = !deadly && isDeathDeck(remaining);
     const out = deadly ? " Then you're out." : "";
-    if (!bidule && !dir && steerable(move)) return `Leaves ${remaining}${lethal ? ", a death deck 💀" : ""}. You pick who gets it.${out}`;
+    if (!dir && steerable(card)) return `Leaves ${remaining}${lethal ? ", a death deck 💀" : ""}. You pick who gets it.${out}`;
     const way = dir ?? (remaining % 2 ? "left" : "right");
+    if (bidule) return `Bidule! Sends ${remaining} back to ${from ? nameOf(from.id) : neighbor(way)}.`;
     const to = neighbor(way);
-    if (bidule) return `Bidule! Sends ${remaining} back to ${to}.`;
     return `Leaves ${remaining}, ${way} to ${to}.${lethal ? ` Death deck for ${to} 💀` : ""}${out}`;
   };
 
@@ -444,11 +426,7 @@ export function Game({
     const who = nameOf(play.playerId);
     switch (anim.beat) {
       case "d8":
-        caption = !tactique
-          ? `${who} rolls the d8…`
-          : pairOf(play)
-            ? `${who} plays ${pairOf(play)!.join(" + ")}.`
-            : `${who} plays a ${play.roll}.`;
+        caption = tactique ? `${who} plays a ${play.roll}.` : `${who} rolls the d8…`;
         break;
       case "fly":
         caption =
@@ -469,7 +447,7 @@ export function Game({
           );
         break;
       case "bidule":
-        caption = `Bidule! ${who} blocks with ${pairOf(play)?.join(" + ") ?? "a 7"}${play.nextId ? ` and sends it back to ${nameOf(play.nextId)}` : ""}.`;
+        caption = `Bidule! ${who} blocks with ${play.against ? `a ${play.roll} (${play.against} + ${play.roll} = 7)` : "a 7"}${play.nextId ? ` and sends it back to ${nameOf(play.nextId)}` : ""}.`;
         break;
       case "blick":
         caption = `The d${g.sides} tumbles. A ${g.sides} means Schmilblick…`;
@@ -480,7 +458,9 @@ export function Game({
       case "pass":
         caption = (
           <span className="cn-row cn-center">
-            {play.steered
+            {play.bidule
+              ? `${play.remaining} goes back to ${nameOf(play.nextId)}`
+              : play.steered
               ? `${who} sends ${play.remaining} ${play.dir} to ${nameOf(play.nextId)}`
               : `${play.remaining} left, ${play.remaining % 2 ? "odd" : "even"}, so it goes ${play.dir} to ${nameOf(play.nextId)}`}
             {play.dir && (
@@ -498,8 +478,7 @@ export function Game({
     const mine = g.currentId === you;
     const who = mine ? "Your" : `${nameOf(g.currentId)}'s`;
     if (tactique && mine && preview !== null) caption = previewText(preview);
-    else if (tactique && mine && aim !== null) caption = aimDir ? previewText(aim, aimDir) : previewText(aim);
-    else if (tactique && mine && half !== null) caption = `Now your ${BIDULE_CARD - half}, for a Bidule.`;
+    else if (tactique && mine && aim !== null) caption = previewText(aim, aimDir ?? undefined);
     else if (g.deckState === "returned")
       caption = (
         <>
@@ -513,7 +492,11 @@ export function Game({
           {who} turn, holding {g.deck}. <b className="cn-text-red">Death deck 💀</b>
           {mine &&
             tactique &&
-            (mustBidule ? " Bidule with a 7, or two cards that add up to 7!" : " Nothing in your hand makes 7, so this is your last card.")}
+            (mustBidule
+              ? from && from.card < BIDULE_CARD
+                ? ` Bidule with a 7, or a ${BIDULE_CARD - from.card} to make 7 with ${nameOf(from.id)}'s ${from.card}!`
+                : " Play your 7 for a Bidule!"
+              : " Nothing in your hand blocks it, so this is your last card.")}
         </>
       );
     else caption = `${who} turn, holding ${g.deck}.`;
@@ -601,8 +584,7 @@ export function Game({
 
               <div className="sb-dice" style={accentVar(byId.get(holder ?? "")?.accent ?? "mauve")}>
                 {tactique ? (
-                  play &&
-                  (play.cards ?? [play.roll]).map((c, k) => <CuteCard key={`${play.seq}-${k}`} n={c} value={c} className="sb-played" />)
+                  play && <CuteCard key={play.seq} n={play.roll} value={play.roll} className="sb-played" />
                 ) : (
                   <RollingDie sides={MAX_TAKE} rolling={anim?.beat === "d8"} value={play ? play.roll : null} />
                 )}
@@ -625,7 +607,8 @@ export function Game({
                   <div className={`sb-hand${canRoll ? " is-live" : ""}`} role="group" aria-label="Your hand">
                     {hand.map((card, i) => {
                       const playable = canPick(card);
-                      const picked = preview === card || ((half === card || aim === card) && hand.indexOf(card) === i);
+                      const aimed = aim === card && hand.indexOf(card) === i;
+                      const picked = preview === card || aimed;
                       return (
                         <button
                           key={`${i}-${card}`}
@@ -633,7 +616,7 @@ export function Game({
                           className={`sb-hand-card${picked ? " is-picked" : ""}${mustBidule && playable ? " is-bidule" : ""}`}
                           disabled={!playable}
                           aria-label={`Play ${card}`}
-                          aria-pressed={(half === card || aim === card) && hand.indexOf(card) === i}
+                          aria-pressed={aimed}
                           onMouseEnter={() => playable && !noHover() && setPreview(card)}
                           onMouseLeave={() => !noHover() && setPreview(null)}
                           onFocus={() => playable && !noHover() && setPreview(card)}

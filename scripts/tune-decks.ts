@@ -26,17 +26,20 @@ import {
   MAX_PLAYERS,
   MIN_PLAYERS,
   MODES,
+  biduleCards,
   canSteer,
   dealHand,
+  handoffOf,
   isDeadly,
   isDeathDeck,
-  legalMoves,
+  legalCards,
   playFromHand,
   playTurn,
   resolveTurn,
   type DeckState,
+  type Handoff,
   type Mode,
-  type Move,
+  type Play,
   type Rng,
   type SeatLike,
 } from "../src/shared/rules.ts";
@@ -70,17 +73,15 @@ interface Stats {
   schmilblicks: number;
 }
 
-const sum = (m: Move) => m.reduce((a, b) => a + b, 0);
-
-function botMove(hand: number[], deck: number, state: DeckState, rng: Rng): Move {
-  const legal = legalMoves(hand, deck, state);
-  // On a deadly deck, the legal moves are all Bidules when there is one.
-  const dying = state === "returned" || (isDeadly(deck, state) && sum(legal[0]) !== BIDULE_CARD);
-  const win = legal.find((m) => sum(m) >= deck);
-  if (win && !dying) return win;
-  const kill = legal.find((m) => sum(m) < deck && isDeathDeck(deck - sum(m)));
-  if (kill) return kill;
-  return [keepSevens(legal.flat(), rng)];
+function botCard(hand: number[], deck: number, state: DeckState, from: Handoff | null, rng: Rng) {
+  const legal = legalCards(hand, deck, state, from);
+  // On a deadly deck, the legal cards are all Bidules when there is one.
+  const dying = state === "returned" || (isDeadly(deck, state) && biduleCards(legal, from).length === 0);
+  const win = legal.find((c) => c >= deck);
+  if (win !== undefined && !dying) return win;
+  const kill = legal.find((c) => c < deck && isDeathDeck(deck - c));
+  if (kill !== undefined) return kill;
+  return keepSevens(legal, rng);
 }
 
 /** A random card, other than a 7 when there's a choice. */
@@ -99,6 +100,7 @@ function simulate(players: number, deck: number, mode: Mode): Stats {
     let d = deck;
     let state: DeckState = "normal";
     let deaths = 0;
+    let last: Play | null = null;
     // Only Tactique deals hands, so Hasard draws the same random numbers it always has.
     const bags: Record<string, number[]> = Object.fromEntries(seats.map((p) => [p.id, []]));
     const hands: Record<string, number[]> =
@@ -108,11 +110,13 @@ function simulate(players: number, deck: number, mode: Mode): Stats {
       if (mode === "hasard") p = playTurn(seats, cur, d, rng);
       else {
         const hand = hands[cur];
-        const move = botMove(hand, d, state, rng);
-        const steer = canSteer(move, d) ? (rng(2) ? "left" : "right") : undefined;
-        p = resolveTurn(seats, cur, d, state, move, mode, rng, undefined, steer);
-        if (!p.death) playFromHand(hand, move, bags[cur], rng);
+        const from = handoffOf(last, cur);
+        const card = botCard(hand, d, state, from, rng);
+        const steer = canSteer(card, d) ? (rng(2) ? "left" : "right") : undefined;
+        p = resolveTurn(seats, cur, d, state, card, mode, rng, undefined, { steer, from });
+        if (!p.death) playFromHand(hand, card, bags[cur], rng);
         state = p.nextState;
+        last = p;
       }
       s.turns++;
       if (p.death) deaths++;

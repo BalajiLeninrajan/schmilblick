@@ -18,9 +18,10 @@ export type Ending =
   | { kind: "noWinner"; loserId: string }; // the last player got a death deck
 
 // Hasard is the assignment: a d8 picks how many cards you take.
-// Tactique swaps the d8 for a hidden hand of cards you choose from, plus the Bidule block: a 7, or two
-// cards that add up to 7. You play a hand down to nothing before drawing a new one, so a 7 can't sit in it
-// forever. Each player draws from their own bag of 1 to 8, like Tetris pieces, so every card comes round.
+// Tactique swaps the d8 for a hidden hand of cards you choose from, plus the Bidule block: a 7, or the card
+// that makes 7 with the one the attacker just played. A Bidule sends the death deck back to the attacker.
+// You play a hand down to nothing before drawing a new one, so a 7 can't sit in it forever. Each player draws
+// from their own bag of 1 to 8, like Tetris pieces, so every card comes round.
 // A 1 or an 8 played on its own lets you pick which way the deck goes, so an attack can pick its victim.
 export const MODES = ["hasard", "tactique"] as const;
 export type Mode = (typeof MODES)[number];
@@ -37,12 +38,12 @@ export interface Play {
   playerId: string;
   received: number;
   receivedState: DeckState;
-  roll: number; // d8 face in Hasard, the card played in Tactique (the sum, for a pair)
-  cards?: number[]; // the cards played in Tactique: two for a pair Bidule
+  roll: number; // d8 face in Hasard, the card played in Tactique
   took: number; // min(roll, received)
   remaining: number;
   death: boolean; // the player leaves after this play
-  bidule: boolean; // blocked a death deck with a 7 and sent it back
+  bidule: boolean; // blocked a death deck and sent it back to the attacker
+  against?: number; // a Bidule that wasn't a 7: the attacker's card it made 7 with
   schmilRoll: number | null; // the Schmilblick die; null when the player died or the game ended
   schmilblick: boolean;
   dir: Dir | null; // null when the player took the last cards
@@ -76,36 +77,43 @@ export function nextAlive(seats: SeatLike[], fromId: string, dir: Dir): SeatLike
   throw new Error("no other live player");
 }
 
-/** A Tactique move: one card, or two that add up to 7 for a Bidule. Pairs are listed low card first. */
-export type Move = number[];
-
-/** The ways `hand` can Bidule: a 7, or two cards that add up to 7. */
-export function biduleMoves(hand: number[]): Move[] {
-  const moves: Move[] = hand.includes(BIDULE_CARD) ? [[BIDULE_CARD]] : [];
-  for (let a = 1; a < BIDULE_CARD / 2; a++) if (hand.includes(a) && hand.includes(BIDULE_CARD - a)) moves.push([a, BIDULE_CARD - a]);
-  return moves;
+/** Who handed you the deck, and the card they played to do it. */
+export interface Handoff {
+  id: string;
+  card: number;
 }
 
-/** Moves a Tactique player may make from `hand` while holding `deck` in `state`. */
-export function legalMoves(hand: number[], deck: number, state: DeckState): Move[] {
+/** How the deck reached `currentId`: from the last play, or null for the starting deck. */
+export const handoffOf = (last: Play | null, currentId: string | null): Handoff | null =>
+  last && currentId && last.nextId === currentId ? { id: last.playerId, card: last.roll } : null;
+
+/** Cards in `hand` that Bidule a death deck: a 7, or the card that makes 7 with the attacker's. */
+export function biduleCards(hand: number[], from: Handoff | null): number[] {
+  const blocks = from && from.card < BIDULE_CARD ? [BIDULE_CARD, BIDULE_CARD - from.card] : [BIDULE_CARD];
+  return [...new Set(hand.filter((c) => blocks.includes(c)))];
+}
+
+/** Cards a Tactique player may play from `hand` while holding `deck` in `state`, handed over by `from`. */
+export function legalCards(hand: number[], deck: number, state: DeckState, from: Handoff | null): number[] {
   if (state === "normal" && isDeathDeck(deck)) {
-    const bidules = biduleMoves(hand);
+    const bidules = biduleCards(hand, from);
     if (bidules.length) return bidules; // Bidule, or die
   }
-  const singles = [...new Set(hand)];
+  const cards = [...new Set(hand)];
   if (state === "returned") {
-    const others = singles.filter((c) => c !== BIDULE_CARD);
-    if (others.length) return others.map((c) => [c]);
+    const others = cards.filter((c) => c !== BIDULE_CARD);
+    if (others.length) return others;
   }
-  return singles.map((c) => [c]);
+  return cards;
 }
 
-/** Whether `move` lets its player pick the direction: a 1 or an 8 on its own that leaves cards to pass. */
-export const canSteer = (move: Move, deck: number) => move.length === 1 && STEER_CARDS.includes(move[0]) && move[0] < deck;
+/** Whether `card` lets its player pick the direction: a 1 or an 8 that leaves cards to pass. Never a Bidule. */
+export const canSteer = (card: number, deck: number) => STEER_CARDS.includes(card) && card < deck;
 
-export function sameMove(a: Move, b: Move) {
-  const [x, y] = [a, b].map((m) => [...m].sort((p, q) => p - q));
-  return x.length === y.length && x.every((c, i) => c === y[i]);
+/** A Tactique player's choices beyond the card itself. */
+export interface TurnChoice {
+  steer?: Dir; // where a 1 or an 8 sends the deck
+  from?: Handoff | null; // who handed the deck over, for a Bidule
 }
 
 /** Draws from a player's bag: one of each card from 1 to 8, shuffled, refilled once it runs out. */
@@ -122,16 +130,16 @@ export function drawCard(bag: number[], rng: Rng) {
 
 export const dealHand = (bag: number[], rng: Rng) => Array.from({ length: HAND_SIZE }, () => drawCard(bag, rng));
 
-/** Takes `move` out of a Tactique hand, and deals a new hand from `bag` once the last card is gone. */
-export function playFromHand(hand: number[], move: Move, bag: number[], rng: Rng) {
-  for (const c of move) hand.splice(hand.indexOf(c), 1);
+/** Takes `card` out of a Tactique hand, and deals a new hand from `bag` once the last card is gone. */
+export function playFromHand(hand: number[], card: number, bag: number[], rng: Rng) {
+  hand.splice(hand.indexOf(card), 1);
   if (hand.length === 0) hand.push(...dealHand(bag, rng));
 }
 
 /**
- * Resolves one turn: `playerId`, holding `deck` in `state`, takes as many cards as `cards` add up to
- * (a d8 roll, a played card, or a pair played for a Bidule). The deck goes the way its parity says,
- * or the way `steer` says when a Tactique player plays a 1 or an 8.
+ * Resolves one turn: `playerId`, holding `deck` in `state`, takes `value` cards (a d8 roll or a played card).
+ * The deck goes the way its parity says, the way `steer` says when a Tactique player plays a 1 or an 8,
+ * or back to whoever handed it over (`from`) after a Bidule.
  * Mutates `seats` to mark deaths. The Schmilblick die rolls only after a turn the player survives.
  */
 export function resolveTurn(
@@ -139,23 +147,23 @@ export function resolveTurn(
   playerId: string,
   deck: number,
   state: DeckState,
-  cards: number[],
+  value: number,
   mode: Mode,
   rng: Rng,
   sides: SchmilblickDie = DEFAULT_SCHMILBLICK_DIE,
-  steer?: Dir,
+  { steer, from = null }: TurnChoice = {},
 ): Play {
   const me = seats.find((s) => s.id === playerId)!;
-  const value = cards.reduce((a, b) => a + b, 0);
   const took = Math.min(value, deck);
   const remaining = deck - took;
   const deadly = isDeadly(deck, state);
-  const bidule = mode === "tactique" && state === "normal" && deadly && value === BIDULE_CARD;
+  const bidule = mode === "tactique" && state === "normal" && deadly && biduleCards([value], from).length > 0;
   const death = deadly && !bidule;
   // A dying Tactique player can only leave a multiple of 7 by being forced to play a 7; that deck can't kill.
   const nextState: DeckState = bidule ? "returned" : mode === "tactique" && death && isDeathDeck(remaining) ? "safe" : "normal";
-  const steered = mode === "tactique" && steer !== undefined && canSteer(cards, deck);
-  const base = { playerId, received: deck, receivedState: state, roll: value, cards, took, remaining, death, bidule, nextState };
+  const steered = mode === "tactique" && !bidule && steer !== undefined && canSteer(value, deck);
+  const against = bidule && value !== BIDULE_CARD ? from!.card : undefined;
+  const base = { playerId, received: deck, receivedState: state, roll: value, against, took, remaining, death, bidule, nextState };
 
   if (remaining === 0) {
     const ending: Ending = death ? { kind: "noWinner", loserId: playerId } : { kind: "lastCard", winnerId: playerId };
@@ -163,8 +171,11 @@ export function resolveTurn(
     return { ...base, schmilRoll: null, schmilblick: false, dir: null, nextId: null, ending };
   }
 
-  const dir: Dir = steered ? steer! : remaining % 2 === 1 ? "left" : "right";
-  const next = nextAlive(seats, playerId, dir);
+  // A Bidule goes back to the attacker. The starting deck has no attacker, so a 7 on it follows its parity.
+  const sender = bidule && from ? seats.find((s) => s.id === from.id && s.alive) : undefined;
+  let dir: Dir = steered ? steer! : remaining % 2 === 1 ? "left" : "right";
+  if (sender) dir = nextAlive(seats, playerId, "left").id === sender.id ? "left" : "right";
+  const next = sender ?? nextAlive(seats, playerId, dir);
   const route = { dir, steered, nextId: next.id };
 
   if (death) {
@@ -192,5 +203,5 @@ export function playTurn(
   rng: Rng,
   sides: SchmilblickDie = DEFAULT_SCHMILBLICK_DIE,
 ): Play {
-  return resolveTurn(seats, playerId, deck, "normal", [rng(MAX_TAKE) + 1], "hasard", rng, sides);
+  return resolveTurn(seats, playerId, deck, "normal", rng(MAX_TAKE) + 1, "hasard", rng, sides);
 }

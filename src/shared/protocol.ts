@@ -51,7 +51,7 @@ export type ClientMsg =
   | { t: "length"; length: GameLength }
   | { t: "die"; sides: SchmilblickDie }
   | { t: "mode"; mode: Mode }
-  | { t: "play"; cards: number[]; dir?: Dir } // one card, or a pair that adds up to 7 for a Bidule. dir: where a 1 or an 8 sends it
+  | { t: "play"; card: number; dir?: Dir } // dir: where a 1 or an 8 sends the deck
   | { t: "start" }
   | { t: "roll" }
   | { t: "lobby" }
