@@ -242,6 +242,7 @@ function PlaysLog({
               <div className="cn-name cn-truncate">
                 {who?.name ?? "?"} {p.back ? `put back ${p.roll}` : `took ${p.took}`}
                 {p.stolenBy && `, stolen by ${nameOf(p.stolenBy)}`}
+                {p.wiped && `, wiped ${nameOf(p.wiped.id)}`}
               </div>
               <div className="cn-meta">
                 {verb} {p.roll} · {p.remaining} left
@@ -339,6 +340,7 @@ export function Game({
   };
   const cardsShown = (p: PublicPlayer) => {
     if (play && p.id === play.stolenBy) return reached(anim, "fly") ? p.cards : p.cards - play.took;
+    if (play?.wiped?.id === p.id) return reached(anim, "bidule") ? p.cards : play.wiped.lost;
     if (!play || p.id !== play.playerId) return p.cards;
     if (play.lost !== undefined && !reached(anim, "death")) return play.lost; // a Tactique death wipes it at the death beat
     return reached(anim, "fly") ? p.cards : p.cards - scored(play, g.mode);
@@ -450,6 +452,8 @@ export function Game({
   }); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** What playing `card` would do (putting it `back`, sending it `dir` for a 1 or an 8), for the preview. */
+  const verdictOf = (mine: number, top: { name: string; cards: number }) =>
+    mine > top.cards ? "You win!" : mine === top.cards ? `You tie with ${top.name}.` : `${top.name} still took more.`;
   const previewText = (card: number, dir?: Dir, back = false) => {
     if (back) {
       const remaining = g.deck + card;
@@ -465,9 +469,14 @@ export function Game({
     if (remaining === 0) {
       if (deadly && !bidule) return "Takes the last cards and ends the game, but the death deck wipes you back to 0.";
       const mine = (byId.get(you)?.cards ?? 0) + card;
-      const top = seats.filter((p) => p.id !== you).reduce((a, p) => (p.cards > a.cards ? p : a), { name: "", cards: 0 });
-      const verdict = mine > top.cards ? "You win!" : mine === top.cards ? `You tie with ${top.name}.` : `${top.name} still took more.`;
-      return `Takes the last cards and ends the game on ${mine}. ${verdict}`;
+      // A Bidule on the last cards wipes the attacker.
+      const wiped = bidule ? from?.id : undefined;
+      const top = seats
+        .filter((p) => p.id !== you)
+        .map((p) => (p.id === wiped ? { ...p, cards: 0 } : p))
+        .reduce((a, p) => (p.cards > a.cards ? p : a), { name: "", cards: 0 });
+      if (wiped) return `Bidule! Takes the last cards, wipes ${nameOf(wiped)}, and ends the game on ${mine}. ${verdictOf(mine, top)}`;
+      return `Takes the last cards and ends the game on ${mine}. ${verdictOf(mine, top)}`;
     }
     const lethal = !deadly && isDeathDeck(remaining);
     const out = deadly ? ` Then you're wiped back to 0.` : "";
@@ -508,7 +517,7 @@ export function Game({
           );
         break;
       case "bidule":
-        caption = `Bidule! ${who} blocks with ${play.against ? `a ${play.roll} (${play.against} + ${play.roll} = 7)` : "a 7"}${play.nextId ? ` and sends it back to ${nameOf(play.nextId)}` : ""}.`;
+        caption = `Bidule! ${who} blocks with ${play.against ? `a ${play.roll} (${play.against} + ${play.roll} = 7)` : "a 7"}${play.nextId ? ` and sends it back to ${nameOf(play.nextId)}` : ""}.${play.wiped ? ` No cards left to send back, so ${nameOf(play.wiped.id)} loses all ${play.wiped.lost}.` : ""}`;
         break;
       case "blick":
         caption = `The d${g.sides} tumbles. A ${g.sides} means Schmilblick…`;

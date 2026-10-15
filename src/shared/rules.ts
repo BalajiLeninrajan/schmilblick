@@ -52,6 +52,7 @@ export interface Play {
   lost?: number; // Tactique: the total a death wiped (filled in by whoever keeps the totals)
   bidule: boolean; // blocked a death deck and sent it back to the attacker
   stolenBy?: string; // Tactique: the player whose Bidule sent this deck back, who gets what this play took
+  wiped?: { id: string; lost: number }; // Tactique: a Bidule on the last cards can't send the deck back, so it wipes the attacker
   against?: number; // a Bidule that wasn't a 7: the attacker's card it made 7 with
   schmilRoll: number | null; // the Schmilblick die; null when the player died or the game ended
   schmilblick: boolean;
