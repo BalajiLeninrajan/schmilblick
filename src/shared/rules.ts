@@ -20,7 +20,8 @@ export type Ending =
 
 // Hasard is the assignment: a d8 picks how many cards you take.
 // Tactique swaps the d8 for a hidden hand of cards you choose from, plus the Bidule block: a 7, or the card
-// that makes 7 with the one the attacker just played. A Bidule sends the death deck back to the attacker.
+// that makes 7 with the one the attacker just played. A Bidule sends the death deck back to the attacker, and
+// whatever they take from it goes to the player who Bidule'd.
 // You play a hand down to nothing before drawing a new one, so a 7 can't sit in it forever. Each player draws
 // from their own bag of 1 to 8, like Tetris pieces, so every card comes round.
 // A 1 or an 8 played on its own lets you pick which way the deck goes, so an attack can pick its victim.
@@ -50,6 +51,7 @@ export interface Play {
   death: boolean; // the player got a death deck: out in Hasard, wiped back to 0 cards in Tactique
   lost?: number; // Tactique: the total a death wiped (filled in by whoever keeps the totals)
   bidule: boolean; // blocked a death deck and sent it back to the attacker
+  stolenBy?: string; // Tactique: the player whose Bidule sent this deck back, who gets what this play took
   against?: number; // a Bidule that wasn't a 7: the attacker's card it made 7 with
   schmilRoll: number | null; // the Schmilblick die; null when the player died or the game ended
   schmilblick: boolean;
@@ -185,6 +187,7 @@ export function resolveTurn(
   const nextState: DeckState = bidule ? "returned" : mode === "tactique" && death && isDeathDeck(remaining) ? "safe" : "normal";
   const steered = mode === "tactique" && !bidule && steer !== undefined && canSteer(value, deck, back);
   const against = bidule && value !== BIDULE_CARD ? from!.card : undefined;
+  const stolenBy = mode === "tactique" && state === "returned" && from ? from.id : undefined;
   const base = {
     playerId,
     received: deck,
@@ -192,6 +195,7 @@ export function resolveTurn(
     roll: value,
     against,
     took,
+    ...(stolenBy && { stolenBy }),
     ...(back && { back }),
     remaining,
     death,

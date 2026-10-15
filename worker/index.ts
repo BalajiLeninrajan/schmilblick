@@ -385,6 +385,8 @@ export class Lobby extends DurableObject<Env> {
       play.lost = me.cards;
       me.cards = 0;
     }
+    // Whatever a Bidule'd player takes goes to whoever Bidule'd them.
+    if (play.stolenBy) seats.find((p) => p.id === play.stolenBy)!.cards += play.took;
 
     const seqPlay: SeqPlay = { ...play, seq: ++g.seq };
     g.lastPlay = seqPlay;

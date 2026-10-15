@@ -241,6 +241,7 @@ function PlaysLog({
             <div className="cn-grow cn-min-0">
               <div className="cn-name cn-truncate">
                 {who?.name ?? "?"} {p.back ? `put back ${p.roll}` : `took ${p.took}`}
+                {p.stolenBy && `, stolen by ${nameOf(p.stolenBy)}`}
               </div>
               <div className="cn-meta">
                 {verb} {p.roll} · {p.remaining} left
@@ -337,6 +338,7 @@ export function Game({
     return false;
   };
   const cardsShown = (p: PublicPlayer) => {
+    if (play && p.id === play.stolenBy) return reached(anim, "fly") ? p.cards : p.cards - play.took;
     if (!play || p.id !== play.playerId) return p.cards;
     if (play.lost !== undefined && !reached(anim, "death")) return play.lost; // a Tactique death wipes it at the death beat
     return reached(anim, "fly") ? p.cards : p.cards - scored(play, g.mode);
@@ -471,7 +473,7 @@ export function Game({
     const out = deadly ? ` Then you're wiped back to 0.` : "";
     if (!dir && steerable(card)) return `Leaves ${remaining}${lethal ? ", a death deck 💀" : ""}. You pick who gets it.${out}`;
     const way = dir ?? (remaining % 2 ? "left" : "right");
-    if (bidule) return `Bidule! Sends ${remaining} back to ${from ? nameOf(from.id) : neighbor(way)}.`;
+    if (bidule) return `Bidule! Sends ${remaining} back to ${from ? nameOf(from.id) : neighbor(way)}, and you steal whatever they take.`;
     const to = neighbor(way);
     return `Leaves ${remaining}, ${way} to ${to}.${lethal ? ` Death deck for ${to} 💀` : ""}${out}`;
   };
@@ -490,6 +492,7 @@ export function Game({
           : play.took < play.roll
             ? `${tactique ? "Played" : "Rolled"} ${play.roll}, but only ${play.took} left. ${who} takes them all.`
             : `${who} takes ${play.took}.`;
+        if (play.stolenBy) caption = `${caption} ${nameOf(play.stolenBy)} steals them.`;
         break;
       case "death":
         caption =
@@ -547,7 +550,10 @@ export function Game({
       caption = (
         <>
           {who} turn, holding {g.deck}. <b className="cn-text-red">Bidule'd 💀</b>
-          {mine && (tactique ? " Whatever you play, you're wiped back to 0." : " Play your last card.")}
+          {mine &&
+            (tactique
+              ? ` Whatever you play, you're wiped back to 0${from ? `, and ${nameOf(from.id)} steals what you take` : ""}.`
+              : " Play your last card.")}
         </>
       );
     else if (g.deckState === "normal" && isDeathDeck(g.deck))
@@ -806,7 +812,7 @@ export function Game({
         {anim?.beat === "fly" &&
           play &&
           Array.from({ length: play.took }, (_, k) => {
-            const to = pos(play.playerId);
+            const to = pos(play.stolenBy ?? play.playerId);
             return (
               <CuteCard
                 key={`${play.seq}-${k}`}
