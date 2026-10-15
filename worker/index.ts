@@ -366,10 +366,10 @@ export class Lobby extends DurableObject<Env> {
     const seats = g.seats.map((id) => s.players.find((p) => p.id === id)!);
     const sides = g.sides ?? DEFAULT_SCHMILBLICK_DIE;
     let play;
+    const from = handoffOf(g.lastPlay, g.currentId);
     if (g.mode === "tactique") {
       const hand = (g.hands ??= {})[g.currentId!] ?? [];
       const state = g.deckState ?? "normal";
-      const from = handoffOf(g.lastPlay, g.currentId);
       const legal = legalCards(hand, g.deck, state, from);
       const value = card ?? legal[rng(legal.length)];
       play = resolveTurn(seats, g.currentId!, g.deck, state, value, "tactique", rng, sides, { ...choice, from });
@@ -384,6 +384,14 @@ export class Lobby extends DurableObject<Env> {
       // A Tactique death wipes your total, and you play on.
       play.lost = me.cards;
       me.cards = 0;
+    }
+    // Whatever a Bidule'd player takes goes to whoever Bidule'd them.
+    if (play.stolenBy) seats.find((p) => p.id === play.stolenBy)!.cards += play.took;
+    if (play.bidule && play.remaining === 0 && from) {
+      // There's no deck left to send back, so the attacker is wiped on the spot.
+      const attacker = seats.find((p) => p.id === from.id)!;
+      play.wiped = { id: attacker.id, lost: attacker.cards };
+      attacker.cards = 0;
     }
 
     const seqPlay: SeqPlay = { ...play, seq: ++g.seq };
