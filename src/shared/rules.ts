@@ -15,7 +15,8 @@ export type Dir = "left" | "right";
 export type Ending =
   | { kind: "lastCard"; winnerId: string } // took the last cards
   | { kind: "lastStanding"; winnerId: string } // everyone else died
-  | { kind: "noWinner"; loserId: string }; // the last player got a death deck
+  | { kind: "noWinner"; loserId: string } // the last player got a death deck
+  | { kind: "mostCards"; winnerIds: string[]; cards: number }; // Tactique: most cards at the end, a tie shares the win
 
 // Hasard is the assignment: a d8 picks how many cards you take.
 // Tactique swaps the d8 for a hidden hand of cards you choose from, plus the Bidule block: a 7, or the card
@@ -23,6 +24,8 @@ export type Ending =
 // You play a hand down to nothing before drawing a new one, so a 7 can't sit in it forever. Each player draws
 // from their own bag of 1 to 8, like Tetris pieces, so every card comes round.
 // A 1 or an 8 played on its own lets you pick which way the deck goes, so an attack can pick its victim.
+// Nobody is knocked out of Tactique. A death wipes your total and you play on; the game ends on the last
+// card, and the most cards wins.
 export const MODES = ["hasard", "tactique"] as const;
 export type Mode = (typeof MODES)[number];
 export const HAND_SIZE = 3;
@@ -41,7 +44,8 @@ export interface Play {
   roll: number; // d8 face in Hasard, the card played in Tactique
   took: number; // min(roll, received)
   remaining: number;
-  death: boolean; // the player leaves after this play
+  death: boolean; // the player got a death deck: out in Hasard, wiped back to 0 cards in Tactique
+  lost?: number; // Tactique: the total a death wiped (filled in by whoever keeps the totals)
   bidule: boolean; // blocked a death deck and sent it back to the attacker
   against?: number; // a Bidule that wasn't a 7: the attacker's card it made 7 with
   schmilRoll: number | null; // the Schmilblick die; null when the player died or the game ended
@@ -65,6 +69,15 @@ export const isDeathDeck = (deck: number) => deck % DEATH_DECK_DIVISOR === 0;
 
 /** Whether holding `deck` in `state` kills you unless you Bidule. */
 export const isDeadly = (deck: number, state: DeckState) => state === "returned" || (state === "normal" && isDeathDeck(deck));
+
+/** Cards a play adds to its player's total. In Tactique, what you take on the turn you die doesn't count. */
+export const scored = (play: Pick<Play, "took" | "death">, mode: Mode) => (mode === "tactique" && play.death ? 0 : play.took);
+
+/** How Tactique ends: whoever holds the most cards wins. */
+export function mostCards(seats: { id: string; cards: number }[]): Ending {
+  const cards = Math.max(...seats.map((s) => s.cards));
+  return { kind: "mostCards", winnerIds: seats.filter((s) => s.cards === cards).map((s) => s.id), cards };
+}
 
 export function nextAlive(seats: SeatLike[], fromId: string, dir: Dir): SeatLike {
   const n = seats.length;
@@ -140,7 +153,7 @@ export function playFromHand(hand: number[], card: number, bag: number[], rng: R
  * Resolves one turn: `playerId`, holding `deck` in `state`, takes `value` cards (a d8 roll or a played card).
  * The deck goes the way its parity says, the way `steer` says when a Tactique player plays a 1 or an 8,
  * or back to whoever handed it over (`from`) after a Bidule.
- * Mutates `seats` to mark deaths. The Schmilblick die rolls only after a turn the player survives.
+ * Mutates `seats` to knock out Hasard players. The Schmilblick die rolls only after a turn the player survives.
  */
 export function resolveTurn(
   seats: SeatLike[],
@@ -159,6 +172,7 @@ export function resolveTurn(
   const deadly = isDeadly(deck, state);
   const bidule = mode === "tactique" && state === "normal" && deadly && biduleCards([value], from).length > 0;
   const death = deadly && !bidule;
+  const out = death && mode === "hasard"; // a Tactique death wipes your total instead
   // A dying Tactique player can only leave a multiple of 7 by being forced to play a 7; that deck can't kill.
   const nextState: DeckState = bidule ? "returned" : mode === "tactique" && death && isDeathDeck(remaining) ? "safe" : "normal";
   const steered = mode === "tactique" && !bidule && steer !== undefined && canSteer(value, deck);
@@ -166,8 +180,8 @@ export function resolveTurn(
   const base = { playerId, received: deck, receivedState: state, roll: value, against, took, remaining, death, bidule, nextState };
 
   if (remaining === 0) {
-    const ending: Ending = death ? { kind: "noWinner", loserId: playerId } : { kind: "lastCard", winnerId: playerId };
-    if (death) me.alive = false;
+    const ending: Ending = out ? { kind: "noWinner", loserId: playerId } : { kind: "lastCard", winnerId: playerId };
+    if (out) me.alive = false;
     return { ...base, schmilRoll: null, schmilblick: false, dir: null, nextId: null, ending };
   }
 
@@ -178,7 +192,7 @@ export function resolveTurn(
   const next = sender ?? nextAlive(seats, playerId, dir);
   const route = { dir, steered, nextId: next.id };
 
-  if (death) {
+  if (out) {
     me.alive = false;
     const alive = seats.filter((s) => s.alive);
     let ending: Ending | null = null;
@@ -190,6 +204,7 @@ export function resolveTurn(
     }
     return { ...base, ...route, schmilRoll: null, schmilblick: false, ending };
   }
+  if (death) return { ...base, ...route, schmilRoll: null, schmilblick: false, ending: null };
 
   const schmilRoll = rng(sides) + 1;
   return { ...base, ...route, schmilRoll, schmilblick: schmilRoll === sides, ending: null };
