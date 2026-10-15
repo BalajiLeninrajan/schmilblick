@@ -13,7 +13,7 @@ import {
   nextAlive,
   type Dir,
 } from "../shared/rules";
-import { accentVar, ArrowIcon, CardBack, Crown, CuteCard, Die, Ghost, Mug, valueTint } from "./art";
+import { accentVar, ArrowIcon, CardBack, Crown, CuteCard, Die, Ghost, Mug } from "./art";
 import { Avatar } from "./LobbyPage";
 import { Sheet } from "./Sheet";
 import type { useLobby } from "./useLobby";
@@ -169,18 +169,8 @@ function MiniFan({ count, seed }: { count: number; seed: number }) {
   );
 }
 
-/** A Tactique player's hand at their seat: face down so everyone can count it, and face up for you. */
-function HandFan({ count, cards }: { count: number; cards: number[] | null }) {
-  if (cards)
-    return (
-      <span className="sb-hand-chips" role="img" aria-label={`Your hand: ${cards.join(", ")}`}>
-        {cards.map((c, k) => (
-          <span key={k} className="sb-hand-chip" style={valueTint(c)}>
-            {c}
-          </span>
-        ))}
-      </span>
-    );
+/** A Tactique player's hand at their seat, face down so everyone can count it. Your own hand is already in front of you. */
+function HandFan({ count }: { count: number }) {
   return (
     <span className="sb-fan is-hand" role="img" aria-label={`${count} ${count === 1 ? "card" : "cards"} in hand`}>
       {Array.from({ length: count }, (_, k) => (
@@ -562,7 +552,7 @@ export function Game({
                 </span>
               </div>
               {tactique ? (
-                <HandFan count={g.handSizes?.[p.id] ?? 0} cards={p.id === you ? hand : null} />
+                p.id !== you && <HandFan count={g.handSizes?.[p.id] ?? 0} />
               ) : (
                 <MiniFan count={cardsShown(p)} seed={p.id.charCodeAt(0)} />
               )}

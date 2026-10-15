@@ -995,26 +995,6 @@
 }
 
 /* your own hand at your seat, face up */
-.sb-hand-chips {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 3px;
-  height: 26px;
-}
-
-.sb-hand-chip {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 24px;
-  border-radius: 4px;
-  background: var(--accent);
-  color: var(--crust);
-  font: 700 12px/1 var(--sans);
-  font-variant-numeric: tabular-nums;
-}
-
 .sb-played {
   width: 52px;
   animation: sb-flip 0.5s var(--ease-spring) backwards;
@@ -1077,16 +1057,6 @@
   }
 
   .sb-fan.is-hand,
-  .sb-hand-chips {
-    height: 20px;
-  }
-
-  .sb-hand-chip {
-    width: 15px;
-    height: 20px;
-    font-size: 11px;
-  }
-
   .sb-fan.is-hand .sb-card {
     width: 13px;
   }
