@@ -24,6 +24,8 @@ export type Ending =
 // You play a hand down to nothing before drawing a new one, so a 7 can't sit in it forever. Each player draws
 // from their own bag of 1 to 8, like Tetris pieces, so every card comes round.
 // A 1 or an 8 played on its own lets you pick which way the deck goes, so an attack can pick its victim.
+// Instead of taking a card's worth, you can put it back on the deck: it scores nothing, but it can make a
+// death deck.
 // Nobody is knocked out of Tactique. A death wipes your total and you play on; the game ends on the last
 // card, and the most cards wins.
 export const MODES = ["hasard", "tactique"] as const;
@@ -42,7 +44,8 @@ export interface Play {
   received: number;
   receivedState: DeckState;
   roll: number; // d8 face in Hasard, the card played in Tactique
-  took: number; // min(roll, received)
+  took: number; // min(roll, received), or 0 for a card put back
+  back?: boolean; // Tactique: the card went back on the deck instead
   remaining: number;
   death: boolean; // the player got a death deck: out in Hasard, wiped back to 0 cards in Tactique
   lost?: number; // Tactique: the total a death wiped (filled in by whoever keeps the totals)
@@ -121,12 +124,16 @@ export function legalCards(hand: number[], deck: number, state: DeckState, from:
 }
 
 /** Whether `card` lets its player pick the direction: a 1 or an 8 that leaves cards to pass. Never a Bidule. */
-export const canSteer = (card: number, deck: number) => STEER_CARDS.includes(card) && card < deck;
+export const canSteer = (card: number, deck: number, back = false) => STEER_CARDS.includes(card) && (back || card < deck);
+
+/** Whether a Tactique player may put a card back instead of taking. Never on a deck that would kill them. */
+export const canPutBack = (deck: number, state: DeckState) => !isDeadly(deck, state);
 
 /** A Tactique player's choices beyond the card itself. */
 export interface TurnChoice {
   steer?: Dir; // where a 1 or an 8 sends the deck
   from?: Handoff | null; // who handed the deck over, for a Bidule
+  back?: boolean; // put the card back on the deck instead of taking
 }
 
 /** Draws from a player's bag: one of each card from 1 to 8, shuffled, refilled once it runs out. */
@@ -150,9 +157,9 @@ export function playFromHand(hand: number[], card: number, bag: number[], rng: R
 }
 
 /**
- * Resolves one turn: `playerId`, holding `deck` in `state`, takes `value` cards (a d8 roll or a played card).
- * The deck goes the way its parity says, the way `steer` says when a Tactique player plays a 1 or an 8,
- * or back to whoever handed it over (`from`) after a Bidule.
+ * Resolves one turn: `playerId`, holding `deck` in `state`, takes `value` cards (a d8 roll or a played card),
+ * or puts `value` back on the deck. The deck goes the way its parity says, the way `steer` says when a
+ * Tactique player plays a 1 or an 8, or back to whoever handed it over (`from`) after a Bidule.
  * Mutates `seats` to knock out Hasard players. The Schmilblick die rolls only after a turn the player survives.
  */
 export function resolveTurn(
@@ -164,20 +171,33 @@ export function resolveTurn(
   mode: Mode,
   rng: Rng,
   sides: SchmilblickDie = DEFAULT_SCHMILBLICK_DIE,
-  { steer, from = null }: TurnChoice = {},
+  { steer, from = null, back: wantsBack = false }: TurnChoice = {},
 ): Play {
   const me = seats.find((s) => s.id === playerId)!;
-  const took = Math.min(value, deck);
-  const remaining = deck - took;
+  const back = mode === "tactique" && wantsBack && canPutBack(deck, state);
+  const took = back ? 0 : Math.min(value, deck);
+  const remaining = back ? deck + value : deck - took;
   const deadly = isDeadly(deck, state);
   const bidule = mode === "tactique" && state === "normal" && deadly && biduleCards([value], from).length > 0;
   const death = deadly && !bidule;
   const out = death && mode === "hasard"; // a Tactique death wipes your total instead
   // A dying Tactique player can only leave a multiple of 7 by being forced to play a 7; that deck can't kill.
   const nextState: DeckState = bidule ? "returned" : mode === "tactique" && death && isDeathDeck(remaining) ? "safe" : "normal";
-  const steered = mode === "tactique" && !bidule && steer !== undefined && canSteer(value, deck);
+  const steered = mode === "tactique" && !bidule && steer !== undefined && canSteer(value, deck, back);
   const against = bidule && value !== BIDULE_CARD ? from!.card : undefined;
-  const base = { playerId, received: deck, receivedState: state, roll: value, against, took, remaining, death, bidule, nextState };
+  const base = {
+    playerId,
+    received: deck,
+    receivedState: state,
+    roll: value,
+    against,
+    took,
+    ...(back && { back }),
+    remaining,
+    death,
+    bidule,
+    nextState,
+  };
 
   if (remaining === 0) {
     const ending: Ending = out ? { kind: "noWinner", loserId: playerId } : { kind: "lastCard", winnerId: playerId };

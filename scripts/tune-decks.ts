@@ -13,10 +13,10 @@
 // instead of a deck so big that the extra cards never get played.
 //
 // Nobody dies out of Tactique, so it has no ceiling: every game ends on the last card, and its target is
-// just the turns-per-player goal. The search starts from a probe of how many turns each card buys and scans
-// around that guess.
-// Tactique bots are greedy: take the last cards when they can, attack whenever a card leaves a death deck,
-// and Bidule whenever they can. Otherwise they play a random card other than a 7,
+// just the turns-per-player goal. Put-backs grow the deck, so the search starts from a probe of how many
+// turns each card buys and scans around that guess.
+// Tactique bots are greedy: take the last cards when they can, attack whenever a card leaves a death deck
+// (taking or putting back), and Bidule whenever they can. Otherwise they play a random card other than a 7,
 // the way people hold on to theirs. A 1 or an 8 goes a random way, since they can't see who holds a 7.
 
 import { writeFileSync } from "node:fs";
@@ -26,6 +26,7 @@ import {
   MIN_PLAYERS,
   MODES,
   biduleCards,
+  canPutBack,
   canSteer,
   dealHand,
   handoffOf,
@@ -76,10 +77,12 @@ function botCard(hand: number[], deck: number, state: DeckState, from: Handoff |
   // On a deadly deck, the legal cards are all Bidules when there is one.
   const dying = state === "returned" || (isDeadly(deck, state) && biduleCards(legal, from).length === 0);
   const win = legal.find((c) => c >= deck);
-  if (win !== undefined && !dying) return win;
+  if (win !== undefined && !dying) return { card: win };
   const kill = legal.find((c) => c < deck && isDeathDeck(deck - c));
-  if (kill !== undefined) return kill;
-  return keepSevens(legal, rng);
+  if (kill !== undefined) return { card: kill };
+  const push = canPutBack(deck, state) ? hand.find((c) => c !== BIDULE_CARD && isDeathDeck(deck + c)) : undefined;
+  if (push !== undefined) return { card: push, back: true };
+  return { card: keepSevens(legal, rng) };
 }
 
 /** A random card, other than a 7 when there's a choice. */
@@ -109,9 +112,9 @@ function simulate(players: number, deck: number, mode: Mode): Stats {
       else {
         const hand = hands[cur];
         const from = handoffOf(last, cur);
-        const card = botCard(hand, d, state, from, rng);
-        const steer = canSteer(card, d) ? (rng(2) ? "left" : "right") : undefined;
-        p = resolveTurn(seats, cur, d, state, card, mode, rng, undefined, { steer, from });
+        const { card, back } = botCard(hand, d, state, from, rng);
+        const steer = canSteer(card, d, back) ? (rng(2) ? "left" : "right") : undefined;
+        p = resolveTurn(seats, cur, d, state, card, mode, rng, undefined, { steer, from, back });
         playFromHand(hand, card, bags[cur], rng);
         state = p.nextState;
         last = p;

@@ -1,8 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { AFK_MS, BEATS, type LobbyState, type PublicPlayer, type SeqPlay } from "../shared/protocol";
 import {
   BIDULE_CARD,
   biduleCards,
+  canPutBack,
   canSteer,
   DEATH_DECK_DIVISOR,
   handoffOf,
@@ -238,7 +240,7 @@ function PlaysLog({
             {who && <Avatar p={who} />}
             <div className="cn-grow cn-min-0">
               <div className="cn-name cn-truncate">
-                {who?.name ?? "?"} took {p.took}
+                {who?.name ?? "?"} {p.back ? `put back ${p.roll}` : `took ${p.took}`}
               </div>
               <div className="cn-meta">
                 {verb} {p.roll} · {p.remaining} left
@@ -349,34 +351,77 @@ export function Game({
   const legal = tactique && hand ? legalCards(hand, g.deck, g.deckState, from) : [];
   // On a death deck you hold a Bidule for, the Bidules are your only cards.
   const mustBidule = g.deckState === "normal" && isDeathDeck(g.deck) && !!hand && biduleCards(hand, from).length > 0;
+  // Drag a card onto the deck to put it back instead of taking it. Not on a deck that would kill you.
+  const mayPutBack = tactique && canPutBack(g.deck, g.deckState);
   const canPick = (card: number) => canRoll && legal.includes(card);
   // A 1 or an 8 waiting for its player to pick which way the deck goes.
-  const [aim, setAim] = useState<number | null>(null);
+  const [aim, setAim] = useState<{ card: number; back: boolean } | null>(null);
   const [aimDir, setAimDir] = useState<Dir | null>(null);
   const liveSeats = seats.map((p) => ({ id: p.id, alive: p.alive }));
   const neighbor = (dir: Dir) => nameOf(nextAlive(liveSeats, you, dir).id);
   /** Whether playing `card` asks which way to send the deck. Not for a Bidule, or when both ways reach the same player. */
-  const steerable = (card: number) =>
-    !mustBidule && canSteer(card, g.deck) && nextAlive(liveSeats, you, "left").id !== nextAlive(liveSeats, you, "right").id;
-  const pick = (card: number) => {
-    if (!canPick(card)) return;
+  const steerable = (card: number, back = false) =>
+    !mustBidule && canSteer(card, g.deck, back) && nextAlive(liveSeats, you, "left").id !== nextAlive(liveSeats, you, "right").id;
+  /** Plays `card`: takes it, or puts it back. A 1 or an 8 waits for a direction first. */
+  const pick = (card: number, back = false) => {
+    if (!canPick(card) || (back && !mayPutBack)) return;
     setPreview(null);
-    if (steerable(card)) setAim(aim === card ? null : card);
+    if (steerable(card, back)) setAim(aim?.card === card && aim.back === back ? null : { card, back });
     else {
       setAim(null);
-      send({ t: "play", card });
+      send({ t: "play", card, back: back || undefined });
     }
   };
   const steer = (dir: Dir) => {
     if (aim === null) return;
     setAim(null);
     setAimDir(null);
-    send({ t: "play", card: aim, dir });
+    send({ t: "play", card: aim.card, dir, back: aim.back || undefined });
   };
+
+  // Dragging a card from your hand: onto the deck puts it back, onto your seat takes it.
+  type DropTarget = "deck" | "seat" | null;
+  const [drag, setDrag] = useState<{ card: number; i: number; x: number; y: number; target: DropTarget } | null>(null);
+  const press = useRef<{ card: number; i: number; x: number; y: number } | null>(null);
+  const dragged = useRef(false); // swallows the click a drag ends with
+  const dropTarget = (x: number, y: number): DropTarget => {
+    const d = deckRef.current?.getBoundingClientRect();
+    const pad = 28; // the deck is small; give the drop some slack
+    if (mayPutBack && d && x > d.left - pad && x < d.right + pad && y > d.top - pad && y < d.bottom + pad) return "deck";
+    const seat = document.elementFromPoint(x, y)?.closest("[data-seat]");
+    return seat?.getAttribute("data-seat") === you ? "seat" : null;
+  };
+  const onCardDown = (e: React.PointerEvent, card: number, i: number) => {
+    if (!canPick(card) || e.button !== 0) return;
+    press.current = { card, i, x: e.clientX, y: e.clientY };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onCardMove = (e: React.PointerEvent) => {
+    const p = press.current;
+    if (!p) return;
+    if (!drag && Math.hypot(e.clientX - p.x, e.clientY - p.y) < 8) return;
+    setPreview(null);
+    setDrag({ card: p.card, i: p.i, x: e.clientX, y: e.clientY, target: dropTarget(e.clientX, e.clientY) });
+  };
+  const onCardUp = () => {
+    const d = drag;
+    press.current = null;
+    if (!d) return;
+    dragged.current = true;
+    setDrag(null);
+    if (d.target) pick(d.card, d.target === "deck");
+  };
+  const onCardCancel = () => {
+    press.current = null;
+    setDrag(null);
+  };
+
   useEffect(() => {
     setPreview(null);
     setAim(null);
     setAimDir(null);
+    setDrag(null);
+    press.current = null;
   }, [g.currentId, g.lastPlay?.seq]);
 
   useEffect(() => {
@@ -384,12 +429,13 @@ export function Game({
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
       if (tactique) {
-        // 1, 2, 3 play the cards in your hand from left to right. The arrow keys send a 1 or an 8 that way,
-        // and Escape cancels it.
+        // 1, 2, 3 take the cards in your hand from left to right, and Shift puts them back instead (the keyboard's drag).
+        // The arrow keys send a 1 or an 8 that way, and Escape cancels it.
         if (e.key === "Escape") setAim(null);
         if (aim !== null && (e.key === "ArrowLeft" || e.key === "ArrowRight")) steer(e.key === "ArrowLeft" ? "left" : "right");
-        const card = hand?.[Number(e.key) - 1];
-        if (card !== undefined) pick(card);
+        const slot = /^Digit[1-9]$/.test(e.code) ? Number(e.code.slice(5)) : NaN;
+        const card = hand?.[slot - 1];
+        if (card !== undefined) pick(card, e.shiftKey);
         return;
       }
       if ((e.key === " " || e.key === "Enter") && !(e.target instanceof HTMLButtonElement)) {
@@ -401,8 +447,16 @@ export function Game({
     return () => removeEventListener("keydown", onKey);
   }); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** What playing `card` would do (sending it `dir`, for a 1 or an 8), for the hover preview. */
-  const previewText = (card: number, dir?: Dir) => {
+  /** What playing `card` would do (putting it `back`, sending it `dir` for a 1 or an 8), for the preview. */
+  const previewText = (card: number, dir?: Dir, back = false) => {
+    if (back) {
+      const remaining = g.deck + card;
+      const lethal = isDeathDeck(remaining);
+      if (!dir && steerable(card, true)) return `Puts back a ${card}, making ${remaining}${lethal ? ", a death deck 💀" : ""}. You pick who gets it.`;
+      const way = dir ?? (remaining % 2 ? "left" : "right");
+      const to = neighbor(way);
+      return `Puts back a ${card}, making ${remaining}, ${way} to ${to}.${lethal ? ` Death deck for ${to} 💀` : ""} You score nothing.`;
+    }
     const deadly = isDeadly(g.deck, g.deckState);
     const bidule = mustBidule; // every card you can play is a Bidule then
     const remaining = g.deck - Math.min(card, g.deck);
@@ -428,11 +482,12 @@ export function Game({
     const who = nameOf(play.playerId);
     switch (anim.beat) {
       case "d8":
-        caption = tactique ? `${who} plays a ${play.roll}.` : `${who} rolls the d8…`;
+        caption = !tactique ? `${who} rolls the d8…` : play.back ? `${who} puts back a ${play.roll}.` : `${who} plays a ${play.roll}.`;
         break;
       case "fly":
-        caption =
-          play.took < play.roll
+        caption = play.back
+          ? `${who} puts ${play.roll} back on the deck, making ${play.remaining}.`
+          : play.took < play.roll
             ? `${tactique ? "Played" : "Rolled"} ${play.roll}, but only ${play.took} left. ${who} takes them all.`
             : `${who} takes ${play.took}.`;
         break;
@@ -480,8 +535,14 @@ export function Game({
   } else if (g.currentId) {
     const mine = g.currentId === you;
     const who = mine ? "Your" : `${nameOf(g.currentId)}'s`;
-    if (tactique && mine && preview !== null) caption = previewText(preview);
-    else if (tactique && mine && aim !== null) caption = previewText(aim, aimDir ?? undefined);
+    if (tactique && mine && drag)
+      caption = drag.target
+        ? previewText(drag.card, undefined, drag.target === "deck")
+        : mayPutBack
+          ? "Drop it on the deck to put it back, or on your seat to take it."
+          : "Drop it on your seat to take it. No putting back on a death deck.";
+    else if (tactique && mine && preview !== null) caption = previewText(preview);
+    else if (tactique && mine && aim !== null) caption = previewText(aim.card, aimDir ?? undefined, aim.back);
     else if (g.deckState === "returned")
       caption = (
         <>
@@ -554,10 +615,13 @@ export function Game({
                 receiving && "is-receiving",
                 won && "is-winner",
                 p.id === you && "is-you",
+                p.id === you && drag && "is-drop",
+                p.id === you && drag?.target === "seat" && "is-drop-hot",
               ]
                 .filter(Boolean)
                 .join(" ")}
               style={{ ...accentVar(p.accent), left: `${x}%`, top: `${y}%` }}
+              data-seat={p.id}
             >
               {won && <Crown className="sb-crown" />}
               {anim?.beat === "schmilblick" && alive && <Mug className="sb-mug" />}
@@ -582,7 +646,11 @@ export function Game({
         <div className="sb-center">
           {!ending && (
             <>
-              <div ref={deckRef} className={`sb-deck${deckShown === 0 ? " is-empty" : ""}`} aria-label={`${deckShown} cards in the deck`}>
+              <div
+                ref={deckRef}
+                className={`sb-deck${deckShown === 0 ? " is-empty" : ""}${drag && mayPutBack ? " is-drop" : ""}${drag?.target === "deck" ? " is-drop-hot" : ""}`}
+                aria-label={`${deckShown} cards in the deck`}
+              >
                 {Array.from({ length: Math.min(6, Math.ceil(deckShown / 12)) }, (_, k) => (
                   <CardBack key={k} className="sb-deck-card" style={{ "--k": k } as CSSProperties} />
                 ))}
@@ -616,20 +684,28 @@ export function Game({
                   <div className={`sb-hand${canRoll ? " is-live" : ""}`} role="group" aria-label="Your hand">
                     {hand.map((card, i) => {
                       const playable = canPick(card);
-                      const aimed = aim === card && hand.indexOf(card) === i;
+                      const aimed = aim?.card === card && hand.indexOf(card) === i;
                       const picked = preview === card || aimed;
                       return (
                         <button
                           key={`${i}-${card}`}
                           type="button"
-                          className={`sb-hand-card${picked ? " is-picked" : ""}${mustBidule && playable ? " is-bidule" : ""}`}
+                          className={`sb-hand-card${picked ? " is-picked" : ""}${mustBidule && playable ? " is-bidule" : ""}${drag?.i === i ? " is-dragging" : ""}`}
                           disabled={!playable}
-                          aria-label={`Play ${card}`}
+                          aria-label={`Take ${card}${mayPutBack ? `, or Shift+${i + 1} to put it back` : ""}`}
                           aria-pressed={aimed}
+                          onPointerDown={(e) => onCardDown(e, card, i)}
+                          onPointerMove={onCardMove}
+                          onPointerUp={onCardUp}
+                          onPointerCancel={onCardCancel}
                           onMouseEnter={() => playable && !noHover() && setPreview(card)}
                           onMouseLeave={() => !noHover() && setPreview(null)}
                           onFocus={() => playable && !noHover() && setPreview(card)}
-                          onClick={() => (noHover() && preview !== card ? setPreview(card) : pick(card))}
+                          onClick={() => {
+                            if (dragged.current) return void (dragged.current = false);
+                            if (noHover() && preview !== card) setPreview(card);
+                            else pick(card);
+                          }}
                         >
                           <CuteCard n={card} value={card} />
                         </button>
@@ -637,7 +713,7 @@ export function Game({
                     })}
                   </div>
                   {aim !== null && canRoll && (
-                    <div className="cn-row sb-steer" role="group" aria-label={`Send the deck with your ${aim}`}>
+                    <div className="cn-row sb-steer" role="group" aria-label={`Send the deck with your ${aim.card}`}>
                       {(["left", "right"] as const).map((d) => (
                         <button
                           key={d}
@@ -720,6 +796,12 @@ export function Game({
             </div>
           )}
         </div>
+
+        {drag &&
+          createPortal(
+            <CuteCard n={drag.card} value={drag.card} className="sb-drag-card" style={{ left: drag.x, top: drag.y }} />,
+            document.body,
+          )}
 
         {anim?.beat === "fly" &&
           play &&

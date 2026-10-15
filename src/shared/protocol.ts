@@ -51,7 +51,7 @@ export type ClientMsg =
   | { t: "length"; length: GameLength }
   | { t: "die"; sides: SchmilblickDie }
   | { t: "mode"; mode: Mode }
-  | { t: "play"; card: number; dir?: Dir } // dir: where a 1 or an 8 sends the deck
+  | { t: "play"; card: number; dir?: Dir; back?: boolean } // dir: where a 1 or an 8 sends the deck. back: put it back instead
   | { t: "start" }
   | { t: "roll" }
   | { t: "lobby" }
