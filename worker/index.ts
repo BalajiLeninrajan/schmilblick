@@ -26,9 +26,11 @@ import {
   dealHand,
   handoffOf,
   legalCards,
+  mostCards,
   playFromHand,
   playTurn,
   resolveTurn,
+  scored,
   type DeckState,
   type Dir,
   type Mode,
@@ -365,14 +367,18 @@ export class Lobby extends DurableObject<Env> {
       const legal = legalCards(hand, g.deck, state, from);
       const value = card ?? legal[rng(legal.length)];
       play = resolveTurn(seats, g.currentId!, g.deck, state, value, "tactique", rng, sides, { ...choice, from });
-      if (play.death) delete g.hands[g.currentId!];
-      else playFromHand(hand, value, ((g.bags ??= {})[g.currentId!] ??= []), rng);
+      playFromHand(hand, value, ((g.bags ??= {})[g.currentId!] ??= []), rng);
       g.deckState = play.nextState;
     } else {
       play = playTurn(seats, g.currentId!, g.deck, rng, sides);
     }
     const me = seats.find((p) => p.id === play.playerId)!;
-    me.cards += play.took;
+    me.cards += scored(play, g.mode ?? "hasard");
+    if (g.mode === "tactique" && play.death) {
+      // A Tactique death wipes your total, and you play on.
+      play.lost = me.cards;
+      me.cards = 0;
+    }
 
     const seqPlay: SeqPlay = { ...play, seq: ++g.seq };
     g.lastPlay = seqPlay;
@@ -381,7 +387,8 @@ export class Lobby extends DurableObject<Env> {
     g.readyAt = Date.now() + playDuration(play);
 
     if (play.ending) {
-      g.ending = play.ending;
+      // Tactique only ends on the last card, and the most cards wins.
+      g.ending = g.mode === "tactique" ? mostCards(seats) : play.ending;
       g.currentId = null;
       s.phase = "over";
     } else {
