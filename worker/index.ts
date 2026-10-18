@@ -29,6 +29,7 @@ import {
   legalCards,
   mostCards,
   playFromHand,
+  handSize,
   playTurn,
   resolveTurn,
   scored,
@@ -366,14 +367,14 @@ export class Lobby extends DurableObject<Env> {
     const seats = g.seats.map((id) => s.players.find((p) => p.id === id)!);
     const sides = g.sides ?? DEFAULT_SCHMILBLICK_DIE;
     let play;
+    let hand: number[] | null = null;
     const from = handoffOf(g.lastPlay, g.currentId);
     if (g.mode === "tactique") {
-      const hand = (g.hands ??= {})[g.currentId!] ?? [];
+      hand = (g.hands ??= {})[g.currentId!] ?? [];
       const state = g.deckState ?? "normal";
       const legal = legalCards(hand, g.deck, state, from);
       const value = card ?? legal[rng(legal.length)];
       play = resolveTurn(seats, g.currentId!, g.deck, state, value, "tactique", rng, sides, { ...choice, from });
-      playFromHand(hand, value, ((g.bags ??= {})[g.currentId!] ??= []), rng);
       g.deckState = play.nextState;
     } else {
       play = playTurn(seats, g.currentId!, g.deck, rng, sides);
@@ -393,6 +394,8 @@ export class Lobby extends DurableObject<Env> {
       play.wiped = { id: attacker.id, lost: attacker.cards };
       attacker.cards = 0;
     }
+    // A new hand is dealt off the totals after this play, so a wipe already counts.
+    if (hand) playFromHand(hand, play.roll, ((g.bags ??= {})[play.playerId] ??= []), rng, handSize(seats, play.playerId));
 
     const seqPlay: SeqPlay = { ...play, seq: ++g.seq };
     g.lastPlay = seqPlay;

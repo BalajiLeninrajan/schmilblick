@@ -84,7 +84,10 @@ export function Rules() {
       <div>
         <h3 className="cn-name cn-m-0">Tactique</h3>
         <ul className="sb-rules cn-copy">
-          <li>You're dealt 3 cards from 1 to 8 that only you can see. Once all 3 are gone, you're dealt 3 more.</li>
+          <li>
+            You're dealt 3 cards from 1 to 8 that only you can see. Once they're all gone, you're dealt a new hand: 3 cards, plus 1 for
+            each player holding more cards than you, up to 6.
+          </li>
           <li>Play a card to take that many. Or put it back on the deck to add that many: it scores nothing, but it can make a death deck.</li>
           <li>A 1 or an 8 lets you pick which way the deck goes.</li>
           <li>

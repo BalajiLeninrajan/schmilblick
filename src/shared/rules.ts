@@ -22,7 +22,8 @@ export type Ending =
 // Tactique swaps the d8 for a hidden hand of cards you choose from, plus the Bidule block: a 7, or the card
 // that makes 7 with the one the attacker just played. A Bidule sends the death deck back to the attacker, and
 // whatever they take from it goes to the player who Bidule'd.
-// You play a hand down to nothing before drawing a new one, so a 7 can't sit in it forever. Each player draws
+// You play a hand down to nothing before drawing a new one, so a 7 can't sit in it forever. A new hand gets
+// a card for each player holding more cards than you, so whoever is behind has more to play with. Each player draws
 // from their own bag of 1 to 8, like Tetris pieces, so every card comes round.
 // A 1 or an 8 played on its own lets you pick which way the deck goes, so an attack can pick its victim.
 // Instead of taking a card's worth, you can put it back on the deck: it scores nothing, but it can make a
@@ -32,6 +33,7 @@ export type Ending =
 export const MODES = ["hasard", "tactique"] as const;
 export type Mode = (typeof MODES)[number];
 export const HAND_SIZE = 3;
+export const MAX_HAND = 6;
 export const BIDULE_CARD = 7;
 export const STEER_CARDS = [1, 8];
 
@@ -151,12 +153,18 @@ export function drawCard(bag: number[], rng: Rng) {
   return bag.pop()!;
 }
 
-export const dealHand = (bag: number[], rng: Rng) => Array.from({ length: HAND_SIZE }, () => drawCard(bag, rng));
+export const dealHand = (bag: number[], rng: Rng, size = HAND_SIZE) => Array.from({ length: size }, () => drawCard(bag, rng));
 
-/** Takes `card` out of a Tactique hand, and deals a new hand from `bag` once the last card is gone. */
-export function playFromHand(hand: number[], card: number, bag: number[], rng: Rng) {
+/** How many cards `id`'s next hand gets: 3, plus 1 for each player holding more cards, up to 6. */
+export function handSize(seats: { id: string; cards: number }[], id: string) {
+  const mine = seats.find((s) => s.id === id)!.cards;
+  return Math.min(HAND_SIZE + seats.filter((s) => s.cards > mine).length, MAX_HAND);
+}
+
+/** Takes `card` out of a Tactique hand, and deals a new hand of `size` from `bag` once the last card is gone. */
+export function playFromHand(hand: number[], card: number, bag: number[], rng: Rng, size = HAND_SIZE) {
   hand.splice(hand.indexOf(card), 1);
-  if (hand.length === 0) hand.push(...dealHand(bag, rng));
+  if (hand.length === 0) hand.push(...dealHand(bag, rng, size));
 }
 
 /**

@@ -34,6 +34,7 @@ import {
   isDeathDeck,
   legalCards,
   playFromHand,
+  handSize,
   playTurn,
   resolveTurn,
   type DeckState,
@@ -96,7 +97,7 @@ function simulate(players: number, deck: number, mode: Mode): Stats {
   const rng = rngFrom(players * 1000 + deck + (mode === "tactique" ? 7_000_000 : 0));
   const s: Stats = { turns: 0, noWinner: 0, dramatic: 0, deaths: 0, schmilblicks: 0 };
   for (let g = 0; g < SIMS; g++) {
-    const seats: SeatLike[] = Array.from({ length: players }, (_, i) => ({ id: String(i), alive: true }));
+    const seats: (SeatLike & { cards: number })[] = Array.from({ length: players }, (_, i) => ({ id: String(i), alive: true, cards: 0 }));
     let cur = String(rng(players));
     let d = deck;
     let state: DeckState = "normal";
@@ -107,7 +108,7 @@ function simulate(players: number, deck: number, mode: Mode): Stats {
     const hands: Record<string, number[]> =
       mode === "tactique" ? Object.fromEntries(seats.map((p) => [p.id, dealHand(bags[p.id], rng)])) : {};
     for (;;) {
-      let p;
+      let p: Play;
       if (mode === "hasard") p = playTurn(seats, cur, d, rng);
       else {
         const hand = hands[cur];
@@ -115,7 +116,12 @@ function simulate(players: number, deck: number, mode: Mode): Stats {
         const { card, back } = botCard(hand, d, state, from, rng);
         const steer = canSteer(card, d, back) ? (rng(2) ? "left" : "right") : undefined;
         p = resolveTurn(seats, cur, d, state, card, mode, rng, undefined, { steer, from, back });
-        playFromHand(hand, card, bags[cur], rng);
+        // Keep the totals the way the worker does, since they set how big a new hand is.
+        const me = seats.find((x) => x.id === cur)!;
+        me.cards = p.death ? 0 : me.cards + p.took;
+        if (p.stolenBy) seats.find((x) => x.id === p.stolenBy)!.cards += p.took;
+        if (p.bidule && p.remaining === 0 && from) seats.find((x) => x.id === from.id)!.cards = 0;
+        playFromHand(hand, card, bags[cur], rng, handSize(seats, cur));
         state = p.nextState;
         last = p;
       }
