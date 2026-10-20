@@ -941,7 +941,9 @@
   border: 0;
   border-radius: var(--cn-radius-card);
   background: transparent;
-  cursor: pointer;
+  cursor: grab;
+  touch-action: none; /* so a drag doesn't scroll the page on phones */
+  user-select: none;
   transition:
     translate var(--t-fast) var(--ease-spring),
     rotate var(--t-fast) var(--ease-spring),
@@ -985,6 +987,41 @@
   50% {
     filter: drop-shadow(0 0 12px var(--peach));
   }
+}
+
+/* Tactique: drag a card onto the deck to put it back, or onto your seat to take it */
+.sb-hand-card.is-dragging {
+  opacity: 0.25;
+}
+
+.sb-drag-card {
+  position: fixed;
+  z-index: 100;
+  width: 56px;
+  translate: -50% -60%;
+  rotate: -6deg;
+  pointer-events: none;
+  filter: drop-shadow(0 18px 24px rgb(17 17 27 / 0.7));
+}
+
+/* drop zones: the system's dashed open slot, mauve once the card is over it */
+.sb-deck.is-drop::after,
+.sb-seat.is-drop .sb-seat-body {
+  outline: 2px dashed var(--surface-1);
+  outline-offset: 6px;
+  transition: outline-color var(--t-fast) var(--ease-out);
+}
+
+.sb-deck.is-drop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--cn-radius-card);
+}
+
+.sb-deck.is-drop-hot::after,
+.sb-seat.is-drop-hot .sb-seat-body {
+  outline-color: var(--mauve);
 }
 
 /* after picking a 1 or an 8: which way to send the deck */

@@ -23,6 +23,7 @@ import {
   MIN_PLAYERS,
   MODES,
   SCHMILBLICK_DICE,
+  canPutBack,
   dealHand,
   handoffOf,
   legalCards,
@@ -288,9 +289,14 @@ export class Lobby extends DurableObject<Env> {
         if (s.phase !== "playing" || !g || g.mode !== "tactique") return;
         if (g.currentId !== me.id) return "Not your turn.";
         if (Date.now() < g.readyAt - 400) return;
-        const legal = legalCards(g.hands?.[me.id] ?? [], g.deck, g.deckState ?? "normal", handoffOf(g.lastPlay, g.currentId));
-        if (!legal.includes(msg.card)) return "You can't play that card.";
-        this.advance(msg.card, { steer: msg.dir === "left" || msg.dir === "right" ? msg.dir : undefined });
+        const hand = g.hands?.[me.id] ?? [];
+        const state = g.deckState ?? "normal";
+        const back = msg.back === true;
+        const ok = back
+          ? canPutBack(g.deck, state) && hand.includes(msg.card)
+          : legalCards(hand, g.deck, state, handoffOf(g.lastPlay, g.currentId)).includes(msg.card);
+        if (!ok) return back ? "You can't put that back." : "You can't play that card.";
+        this.advance(msg.card, { steer: msg.dir === "left" || msg.dir === "right" ? msg.dir : undefined, back });
         return this.commit();
       }
       case "lobby": {
