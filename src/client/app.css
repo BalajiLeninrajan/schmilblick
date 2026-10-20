@@ -540,6 +540,12 @@
   animation: sb-pop 0.3s var(--ease-spring) backwards;
 }
 
+/* a Tactique hand, face down. Unlike the taken-cards fan, it stays on phones. */
+.sb-fan.is-hand .sb-card {
+  margin-inline: -3px;
+  rotate: calc(var(--k) * 10deg);
+}
+
 /* ---- center: deck, dice, caption ---- */
 
 .sb-center {
@@ -981,6 +987,14 @@
   }
 }
 
+/* after picking a 1 or an 8: which way to send the deck */
+.sb-steer {
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+/* your own hand at your seat, face up */
 .sb-played {
   width: 52px;
   animation: sb-flip 0.5s var(--ease-spring) backwards;
@@ -1038,8 +1052,13 @@
     height: 26px;
   }
 
-  .sb-fan {
+  .sb-fan:not(.is-hand) {
     display: none;
+  }
+
+  .sb-fan.is-hand,
+  .sb-fan.is-hand .sb-card {
+    width: 13px;
   }
 
   .sb-table-facts {

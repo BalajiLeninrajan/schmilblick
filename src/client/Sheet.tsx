@@ -83,11 +83,15 @@ export function Rules() {
       </div>
       <div>
         <h3 className="cn-name cn-m-0">Tactique</h3>
-        <p className="cn-copy cn-m-0">
-          You hold 3 cards from 1 to 8 that only you can see. Play one to take that many, then draw a new one. Handed a death deck while
-          holding a 7? Play it for a <b>Bidule</b>: you survive, and the death deck goes straight back to whoever sent it. They can't Bidule
-          it back, so they're out.
-        </p>
+        <ul className="sb-rules cn-copy">
+          <li>You're dealt 3 cards from 1 to 8 that only you can see. Once all 3 are gone, you're dealt 3 more.</li>
+          <li>Play a card to take that many.</li>
+          <li>A 1 or an 8 lets you pick which way the deck goes.</li>
+          <li>
+            Handed a death deck? Play a 7, or the card that makes 7 with the one that made it, for a <b>Bidule</b>. The death deck goes
+            straight back to whoever sent it. They can't Bidule it back, so they're out.
+          </li>
+        </ul>
       </div>
     </div>
   );

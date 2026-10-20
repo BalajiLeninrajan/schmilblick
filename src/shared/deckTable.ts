@@ -239,19 +239,19 @@ export const DECK_TABLE: Record<Mode, Record<number, Record<GameLength, DeckPres
     "2": {
       short: {
         cards: 30,
-        turns: 3.8,
-        deaths: 0.86,
-        noWinner: 0.016,
+        turns: 4,
+        deaths: 0.82,
+        noWinner: 0.018,
       },
       medium: {
         cards: 86,
-        turns: 4.1,
+        turns: 4.6,
         deaths: 1,
         noWinner: 0,
       },
       long: {
         cards: 180,
-        turns: 4.2,
+        turns: 4.8,
         deaths: 1,
         noWinner: 0,
       },
@@ -259,19 +259,19 @@ export const DECK_TABLE: Record<Mode, Record<number, Record<GameLength, DeckPres
     "3": {
       short: {
         cards: 59,
-        turns: 8,
-        deaths: 1.89,
-        noWinner: 0.012,
+        turns: 8.9,
+        deaths: 1.81,
+        noWinner: 0.022,
       },
       medium: {
         cards: 108,
-        turns: 8.2,
-        deaths: 2,
+        turns: 9.5,
+        deaths: 1.99,
         noWinner: 0.001,
       },
       long: {
         cards: 167,
-        turns: 8.3,
+        turns: 9.5,
         deaths: 2,
         noWinner: 0,
       },
@@ -279,19 +279,19 @@ export const DECK_TABLE: Record<Mode, Record<number, Record<GameLength, DeckPres
     "4": {
       short: {
         cards: 81,
-        turns: 11.9,
-        deaths: 2.87,
-        noWinner: 0.011,
+        turns: 13.5,
+        deaths: 2.75,
+        noWinner: 0.025,
       },
       medium: {
         cards: 144,
-        turns: 12.3,
-        deaths: 3,
+        turns: 14.3,
+        deaths: 2.99,
         noWinner: 0.001,
       },
       long: {
         cards: 225,
-        turns: 11.7,
+        turns: 13.4,
         deaths: 3,
         noWinner: 0,
       },
@@ -299,19 +299,19 @@ export const DECK_TABLE: Record<Mode, Record<number, Record<GameLength, DeckPres
     "5": {
       short: {
         cards: 101,
-        turns: 16,
-        deaths: 3.85,
-        noWinner: 0.013,
+        turns: 18,
+        deaths: 3.68,
+        noWinner: 0.025,
       },
       medium: {
         cards: 183,
-        turns: 15.8,
+        turns: 18.3,
         deaths: 4,
-        noWinner: 0,
+        noWinner: 0.001,
       },
       long: {
         cards: 279,
-        turns: 16.5,
+        turns: 19.3,
         deaths: 4,
         noWinner: 0,
       },
@@ -319,19 +319,19 @@ export const DECK_TABLE: Record<Mode, Record<number, Record<GameLength, DeckPres
     "6": {
       short: {
         cards: 120,
-        turns: 19.3,
-        deaths: 4.85,
-        noWinner: 0.01,
+        turns: 21.7,
+        deaths: 4.66,
+        noWinner: 0.024,
       },
       medium: {
         cards: 225,
-        turns: 19.9,
+        turns: 23.1,
         deaths: 5,
         noWinner: 0,
       },
       long: {
         cards: 320,
-        turns: 20.7,
+        turns: 23.8,
         deaths: 5,
         noWinner: 0,
       },
@@ -339,19 +339,19 @@ export const DECK_TABLE: Record<Mode, Record<number, Record<GameLength, DeckPres
     "7": {
       short: {
         cards: 141,
-        turns: 23.3,
-        deaths: 5.82,
-        noWinner: 0.009,
+        turns: 26.5,
+        deaths: 5.59,
+        noWinner: 0.029,
       },
       medium: {
         cards: 251,
-        turns: 24.8,
+        turns: 28.7,
         deaths: 6,
         noWinner: 0,
       },
       long: {
         cards: 344,
-        turns: 23.9,
+        turns: 27.9,
         deaths: 6,
         noWinner: 0,
       },
@@ -359,19 +359,19 @@ export const DECK_TABLE: Record<Mode, Record<number, Record<GameLength, DeckPres
     "8": {
       short: {
         cards: 159,
-        turns: 28,
-        deaths: 6.72,
-        noWinner: 0.015,
+        turns: 31.2,
+        deaths: 6.41,
+        noWinner: 0.035,
       },
       medium: {
         cards: 290,
-        turns: 28.7,
+        turns: 33.5,
         deaths: 7,
         noWinner: 0,
       },
       long: {
         cards: 395,
-        turns: 28.7,
+        turns: 33.5,
         deaths: 7,
         noWinner: 0,
       },
@@ -379,19 +379,19 @@ export const DECK_TABLE: Record<Mode, Record<number, Record<GameLength, DeckPres
     "9": {
       short: {
         cards: 180,
-        turns: 31.9,
-        deaths: 7.74,
-        noWinner: 0.015,
+        turns: 35.6,
+        deaths: 7.39,
+        noWinner: 0.037,
       },
       medium: {
         cards: 330,
-        turns: 32.1,
+        turns: 37.7,
         deaths: 8,
         noWinner: 0,
       },
       long: {
         cards: 438,
-        turns: 32.8,
+        turns: 38.6,
         deaths: 8,
         noWinner: 0,
       },
@@ -399,19 +399,19 @@ export const DECK_TABLE: Record<Mode, Record<number, Record<GameLength, DeckPres
     "10": {
       short: {
         cards: 204,
-        turns: 35.5,
-        deaths: 8.79,
-        noWinner: 0.009,
+        turns: 40.1,
+        deaths: 8.47,
+        noWinner: 0.03,
       },
       medium: {
         cards: 365,
-        turns: 36.2,
+        turns: 42.5,
         deaths: 9,
         noWinner: 0,
       },
       long: {
         cards: 477,
-        turns: 36.2,
+        turns: 42.6,
         deaths: 9,
         noWinner: 0,
       },
@@ -419,19 +419,19 @@ export const DECK_TABLE: Record<Mode, Record<number, Record<GameLength, DeckPres
     "11": {
       short: {
         cards: 219,
-        turns: 39.9,
-        deaths: 9.72,
-        noWinner: 0.014,
+        turns: 44.7,
+        deaths: 9.23,
+        noWinner: 0.037,
       },
       medium: {
         cards: 404,
-        turns: 40.9,
+        turns: 48,
         deaths: 10,
         noWinner: 0,
       },
       long: {
         cards: 522,
-        turns: 41.2,
+        turns: 48.4,
         deaths: 10,
         noWinner: 0,
       },
@@ -439,19 +439,19 @@ export const DECK_TABLE: Record<Mode, Record<number, Record<GameLength, DeckPres
     "12": {
       short: {
         cards: 240,
-        turns: 44.1,
-        deaths: 10.67,
-        noWinner: 0.013,
+        turns: 49,
+        deaths: 10.18,
+        noWinner: 0.037,
       },
       medium: {
         cards: 437,
-        turns: 45.1,
+        turns: 53.1,
         deaths: 11,
         noWinner: 0,
       },
       long: {
         cards: 575,
-        turns: 44.4,
+        turns: 52.1,
         deaths: 11,
         noWinner: 0,
       },
