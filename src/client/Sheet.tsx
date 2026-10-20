@@ -89,7 +89,7 @@ export function Rules() {
           <li>A 1 or an 8 lets you pick which way the deck goes.</li>
           <li>
             Handed a death deck? Play a 7, or the card that makes 7 with the one that made it, for a <b>Bidule</b>. The death deck goes
-            straight back to whoever sent it, and they can't Bidule it.
+            straight back to whoever sent it, and they can't Bidule it. Whatever they take with it is yours.
           </li>
           <li>Nobody is out. A death deck wipes your cards back to 0, and you play on.</li>
           <li>The game ends on the last card. Whoever holds the most cards wins, and a tie shares the win.</li>
