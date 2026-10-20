@@ -433,7 +433,7 @@ export function Game({
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
       if (tactique) {
-        // 1, 2, 3 take the cards in your hand from left to right, and Shift puts them back instead (the keyboard's drag).
+        // 1 to 6 take the cards in your hand from left to right, and Shift puts them back instead (the keyboard's drag).
         // The arrow keys send a 1 or an 8 that way, and Escape cancels it.
         if (e.key === "Escape") setAim(null);
         if (aim !== null && (e.key === "ArrowLeft" || e.key === "ArrowRight")) steer(e.key === "ArrowLeft" ? "left" : "right");
