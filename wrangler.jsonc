@@ -14,5 +14,10 @@
     "bindings": [{ "name": "LOBBY", "class_name": "Lobby" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Lobby"] }],
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  "previews": {
+    "durable_objects": {
+      "bindings": [{ "name": "LOBBY", "class_name": "Lobby" }]
+    }
+  }
 }
