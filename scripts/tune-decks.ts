@@ -12,13 +12,12 @@
 // its turns-per-player goal, capped at a share of that ceiling, so "long" means a near-battle-royale
 // instead of a deck so big that the extra cards never get played.
 //
-// Tactique isn't searched. Kills, not the deck, end a Tactique game: a bigger deck barely makes it longer,
-// it only makes last-card wins rarer. So Tactique decks are the Hasard deck times TACTIQUE_DECK_SCALE,
-// which makes Tactique mostly a battle to be the last one alive. At 1.5x, players who attack half the
-// time they can still win by taking the last card in about 1 game in 10.
-// The recorded stats come from greedy bots: take the last cards when they can, attack whenever a card
-// leaves a death deck, and Bidule whenever they can. Otherwise they play a random card other than a 7, the
-// way people hold on to theirs. A 1 or an 8 goes a random way, since they can't see who holds a 7.
+// Nobody dies out of Tactique, so it has no ceiling: every game ends on the last card, and its target is
+// just the turns-per-player goal. The search starts from a probe of how many turns each card buys and scans
+// around that guess.
+// Tactique bots are greedy: take the last cards when they can, attack whenever a card leaves a death deck,
+// and Bidule whenever they can. Otherwise they play a random card other than a 7,
+// the way people hold on to theirs. A 1 or an 8 goes a random way, since they can't see who holds a 7.
 
 import { writeFileSync } from "node:fs";
 import {
@@ -45,7 +44,6 @@ import {
 } from "../src/shared/rules.ts";
 
 const SIMS = 4000;
-const TACTIQUE_DECK_SCALE = 1.5;
 // turns per player, and the share of the attrition ceiling a length may reach
 const LENGTHS = {
   short: { perPlayer: 3, ceiling: 0.55 },
@@ -114,7 +112,7 @@ function simulate(players: number, deck: number, mode: Mode): Stats {
         const card = botCard(hand, d, state, from, rng);
         const steer = canSteer(card, d) ? (rng(2) ? "left" : "right") : undefined;
         p = resolveTurn(seats, cur, d, state, card, mode, rng, undefined, { steer, from });
-        if (!p.death) playFromHand(hand, card, bags[cur], rng);
+        playFromHand(hand, card, bags[cur], rng);
         state = p.nextState;
         last = p;
       }
@@ -154,18 +152,29 @@ for (const mode of MODES) {
   for (let n = MIN_PLAYERS; n <= MAX_PLAYERS; n++) {
     table[mode][n] = {} as Row;
     if (mode === "tactique") {
-      for (const name of Object.keys(LENGTHS) as (keyof typeof LENGTHS)[]) {
-        let deck = Math.round(table.hasard[n][name].cards * TACTIQUE_DECK_SCALE);
-        if (isDeathDeck(deck)) deck++;
-        const st = simulate(n, deck, mode);
+      let floor = 10;
+      const probe = 300;
+      const perCard = simulate(n, probe, mode).turns / probe;
+      for (const [name, { perPlayer }] of Object.entries(LENGTHS) as [keyof typeof LENGTHS, (typeof LENGTHS)[keyof typeof LENGTHS]][]) {
+        const target = perPlayer * n;
+        const guess = Math.max(floor, Math.round(target / perCard));
+        let best = { deck: 0, s: -Infinity, st: null as Stats | null };
+        for (let deck = Math.max(floor, guess - 12); deck <= guess + 12; deck++) {
+          if (isDeathDeck(deck)) continue;
+          const st = simulate(n, deck, mode);
+          const sc = score(st, target);
+          if (sc > best.s) best = { deck, s: sc, st };
+        }
+        const st = best.st!;
         table[mode][n][name] = {
-          cards: deck,
+          cards: best.deck,
           turns: +st.turns.toFixed(1),
           deaths: +st.deaths.toFixed(2),
           noWinner: +st.noWinner.toFixed(3),
         };
+        floor = best.deck + Math.max(5, n * 2);
         console.log(
-          `${String(n).padStart(2)}p ${name.padEnd(6)} cards=${String(deck).padStart(3)} turns=${st.turns.toFixed(1).padStart(5)} deaths=${st.deaths.toFixed(2)}`,
+          `${String(n).padStart(2)}p ${name.padEnd(6)} cards=${String(best.deck).padStart(3)} turns=${st.turns.toFixed(1).padStart(5)} (target ${target}) deaths=${st.deaths.toFixed(2)}`,
         );
       }
       continue;

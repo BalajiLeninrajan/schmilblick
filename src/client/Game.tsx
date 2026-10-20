@@ -11,6 +11,7 @@ import {
   legalCards,
   MAX_TAKE,
   nextAlive,
+  scored,
   type Dir,
 } from "../shared/rules";
 import { accentVar, ArrowIcon, CardBack, Crown, CuteCard, Die, Ghost, Mug } from "./art";
@@ -248,7 +249,8 @@ function PlaysLog({
               {p.death && <span className="tag cn-tone-red">Death</span>}
               {p.bidule && <span className="tag cn-tone-peach">Bidule</span>}
               {p.schmilblick && <span className="tag cn-tone-yellow">Schmilblick</span>}
-              {p.ending?.kind === "lastCard" && <span className="tag cn-tone-green">Win</span>}
+              {/* In Tactique, the last card ends the game but the most cards wins. */}
+              {p.ending?.kind === "lastCard" && verb === "rolled" && <span className="tag cn-tone-green">Win</span>}
             </div>
           </li>
         );
@@ -332,7 +334,11 @@ export function Game({
     if (play.ending?.kind === "noWinner" && play.ending.loserId === p.id) return true;
     return false;
   };
-  const cardsShown = (p: PublicPlayer) => (play && p.id === play.playerId && !reached(anim, "fly") ? p.cards - play.took : p.cards);
+  const cardsShown = (p: PublicPlayer) => {
+    if (!play || p.id !== play.playerId) return p.cards;
+    if (play.lost !== undefined && !reached(anim, "death")) return play.lost; // a Tactique death wipes it at the death beat
+    return reached(anim, "fly") ? p.cards : p.cards - scored(play, g.mode);
+  };
   const nameOf = (id: string | null | undefined) => (id ? (byId.get(id)?.name ?? "someone") : "someone");
 
   const myTurn = state.phase === "playing" && !anim && g.currentId === you;
@@ -400,9 +406,15 @@ export function Game({
     const deadly = isDeadly(g.deck, g.deckState);
     const bidule = mustBidule; // every card you can play is a Bidule then
     const remaining = g.deck - Math.min(card, g.deck);
-    if (remaining === 0) return deadly && !bidule ? "Takes the last cards, but you're out. Nobody wins." : "Takes the last cards. You win!";
+    if (remaining === 0) {
+      if (deadly && !bidule) return "Takes the last cards and ends the game, but the death deck wipes you back to 0.";
+      const mine = (byId.get(you)?.cards ?? 0) + card;
+      const top = seats.filter((p) => p.id !== you).reduce((a, p) => (p.cards > a.cards ? p : a), { name: "", cards: 0 });
+      const verdict = mine > top.cards ? "You win!" : mine === top.cards ? `You tie with ${top.name}.` : `${top.name} still took more.`;
+      return `Takes the last cards and ends the game on ${mine}. ${verdict}`;
+    }
     const lethal = !deadly && isDeathDeck(remaining);
-    const out = deadly ? " Then you're out." : "";
+    const out = deadly ? ` Then you're wiped back to 0.` : "";
     if (!dir && steerable(card)) return `Leaves ${remaining}${lethal ? ", a death deck 💀" : ""}. You pick who gets it.${out}`;
     const way = dir ?? (remaining % 2 ? "left" : "right");
     if (bidule) return `Bidule! Sends ${remaining} back to ${from ? nameOf(from.id) : neighbor(way)}.`;
@@ -428,11 +440,12 @@ export function Game({
         caption =
           play.receivedState === "returned" ? (
             <>
-              <b>Bidule'd.</b> {who} can't block a deck that came back, so {who} is out.
+              <b>Bidule'd.</b> {who} can't block a deck that came back, so {tactique ? `${who} loses all ${play.lost ?? 0} cards` : `${who} is out`}.
             </>
           ) : (
             <>
-              <b>Death deck.</b> {play.received} is {DEATH_DECK_DIVISOR} × {play.received / DEATH_DECK_DIVISOR}, so {who} is out.
+              <b>Death deck.</b> {play.received} is {DEATH_DECK_DIVISOR} × {play.received / DEATH_DECK_DIVISOR}, so{" "}
+              {tactique ? `${who} loses all ${play.lost ?? 0} cards` : `${who} is out`}.
             </>
           );
         break;
@@ -473,7 +486,7 @@ export function Game({
       caption = (
         <>
           {who} turn, holding {g.deck}. <b className="cn-text-red">Bidule'd 💀</b>
-          {mine && " Play your last card."}
+          {mine && (tactique ? " Whatever you play, you're wiped back to 0." : " Play your last card.")}
         </>
       );
     else if (g.deckState === "normal" && isDeathDeck(g.deck))
@@ -486,7 +499,7 @@ export function Game({
               ? from && from.card < BIDULE_CARD
                 ? ` Bidule with a 7, or a ${BIDULE_CARD - from.card} to make 7 with ${nameOf(from.id)}'s ${from.card}!`
                 : " Play your 7 for a Bidule!"
-              : " Nothing in your hand blocks it, so this is your last card.")}
+              : " Nothing in your hand blocks it, so you'll be wiped back to 0.")}
         </>
       );
     else caption = `${who} turn, holding ${g.deck}.`;
@@ -499,7 +512,12 @@ export function Game({
     .slice()
     .reverse();
   const flyBase = play ? g.startDeck - play.received : 0;
-  const winner = ending && ending.kind !== "noWinner" ? byId.get(ending.winnerId) : null;
+  const winners = !ending || ending.kind === "noWinner" ? [] : ending.kind === "mostCards" ? ending.winnerIds : [ending.winnerId];
+  const winTitle = winners.includes(you)
+    ? winners.length === 1
+      ? "You win!"
+      : "You share the win!"
+    : `${winners.map(nameOf).join(" and ")} ${winners.length === 1 ? "wins" : "win"}!`;
 
   return (
     <div className="sb-game">
@@ -513,7 +531,8 @@ export function Game({
           </button>
           <span className="cn-meta sb-table-facts">
             {tactique ? "Tactique · " : ""}
-            {g.startDeck} cards · d{g.sides} · {tableDead} out
+            {g.startDeck} cards · d{g.sides}
+            {!tactique && ` · ${tableDead} out`}
           </span>
         </div>
 
@@ -523,7 +542,7 @@ export function Game({
           const active = holder === p.id && !ending;
           const dying = anim?.beat === "death" && play?.playerId === p.id;
           const receiving = anim?.beat === "pass" && play?.nextId === p.id;
-          const won = winner?.id === p.id;
+          const won = winners.includes(p.id);
           return (
             <div
               key={p.id}
@@ -670,11 +689,17 @@ export function Game({
 
           {ending && (
             <div className="sb-ending">
-              {winner ? (
+              {winners.length > 0 ? (
                 <>
                   <Crown className="sb-ending-icon" />
-                  <h2 className="cn-display is-sm">{winner.id === you ? "You win!" : `${winner.name} wins!`}</h2>
-                  <p className="cn-copy">{ending.kind === "lastCard" ? "Took the last card." : "Last one standing."}</p>
+                  <h2 className="cn-display is-sm">{winTitle}</h2>
+                  <p className="cn-copy">
+                    {ending.kind === "mostCards"
+                      ? `Took ${ending.cards} ${winners.length > 1 ? "cards each" : "cards"}, the most at the table.`
+                      : ending.kind === "lastCard"
+                        ? "Took the last card."
+                        : "Last one standing."}
+                  </p>
                 </>
               ) : (
                 <>
@@ -744,7 +769,7 @@ export function Game({
           </div>
         )}
 
-        {winner && <Confetti />}
+        {winners.length > 0 && <Confetti />}
       </div>
 
       <aside className="panel sb-side sb-wide-only">
@@ -752,7 +777,8 @@ export function Game({
           <h2>Plays</h2>
           <span className="cn-meta">
             {tactique ? "Tactique · " : ""}
-            {g.startDeck} cards · d{g.sides} · {tableDead} out
+            {g.startDeck} cards · d{g.sides}
+            {!tactique && ` · ${tableDead} out`}
           </span>
         </div>
         <div className="sb-side-scroll scroll-well">
