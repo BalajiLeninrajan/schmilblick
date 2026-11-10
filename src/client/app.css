@@ -269,21 +269,6 @@
   width: 100%;
 }
 
-/* The package folds its bands at 760px and 520px of viewport. Up to 1.0.0 it also folded them
-   inside any size container, so the stage's Plays drawer folded a gutter's width early. 2.0.0
-   dropped those container folds; these keep the drawer as it was. */
-@container (max-width: 760px) {
-  .sb-stage .panel-footer {
-    flex-wrap: wrap;
-  }
-}
-
-@container (max-width: 520px) {
-  .sb-stage :is(.panel-header, .drawer > header) :is(h2, h3) {
-    font-size: min(var(--band-title-size), var(--cn-type-body-size));
-  }
-}
-
 /* .avatar clips its own ::after, so tooltips sit on wrappers; this restores the stack's overlap for them (package gap) */
 .avatar-stack > [data-tip] + [data-tip] {
   margin-left: calc(-1 * var(--space-2));

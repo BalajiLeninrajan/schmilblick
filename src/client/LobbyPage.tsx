@@ -322,7 +322,7 @@ export function LobbyPage({ code }: { code: string }) {
               <h2>Pull up a chair</h2>
             </div>
             {(state.phase !== "lobby" || state.players.filter((p) => !p.spectator).length >= MAX_PLAYERS) && (
-              <div className="panel-body cn-pb-0">
+              <div className="panel-body">
                 <p className="banner cn-tone-blue cn-m-0">This table is mid-game or full. You'll watch, and sit in for the next one.</p>
               </div>
             )}
