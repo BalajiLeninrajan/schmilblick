@@ -11,9 +11,9 @@ import { savedName, useLobby } from "./useLobby";
 
 type Send = ReturnType<typeof useLobby>["send"];
 
-export function Avatar({ p, lg }: { p: PublicPlayer; lg?: boolean }) {
+export function Avatar({ p }: { p: PublicPlayer }) {
   return (
-    <span className={`avatar${lg ? " is-lg" : ""}`} style={accentVar(p.accent)} aria-hidden="true">
+    <span className="avatar" style={accentVar(p.accent)} aria-hidden="true">
       {p.name.slice(0, 1).toUpperCase()}
     </span>
   );
