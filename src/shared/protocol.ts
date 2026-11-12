@@ -1,7 +1,7 @@
 import type { GameLength } from "./deckTable";
 import type { DeckState, Dir, Ending, Mode, Play, SchmilblickDie } from "./rules";
 
-// Every accent token catppuccin-neu defines. A 12th player repeats the first color.
+// The accents players are dealt. A 12th player repeats the first color.
 export const ACCENTS = ["mauve", "peach", "green", "pink", "sky", "yellow", "red", "teal", "lavender", "blue", "rosewater"] as const;
 export type Accent = (typeof ACCENTS)[number];
 

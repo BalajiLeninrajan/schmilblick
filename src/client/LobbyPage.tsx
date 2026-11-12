@@ -11,9 +11,9 @@ import { savedName, useLobby } from "./useLobby";
 
 type Send = ReturnType<typeof useLobby>["send"];
 
-export function Avatar({ p, lg }: { p: PublicPlayer; lg?: boolean }) {
+export function Avatar({ p }: { p: PublicPlayer }) {
   return (
-    <span className={`avatar${lg ? " is-lg" : ""}`} style={accentVar(p.accent)} aria-hidden="true">
+    <span className="avatar" style={accentVar(p.accent)} aria-hidden="true">
       {p.name.slice(0, 1).toUpperCase()}
     </span>
   );
@@ -322,7 +322,7 @@ export function LobbyPage({ code }: { code: string }) {
               <h2>Pull up a chair</h2>
             </div>
             {(state.phase !== "lobby" || state.players.filter((p) => !p.spectator).length >= MAX_PLAYERS) && (
-              <div className="panel-body cn-pb-0">
+              <div className="panel-body">
                 <p className="banner cn-tone-blue cn-m-0">This table is mid-game or full. You'll watch, and sit in for the next one.</p>
               </div>
             )}
